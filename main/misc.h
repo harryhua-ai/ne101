@@ -62,7 +62,7 @@ extern "C" {
 #define SENSOR_POWER_IO (3)
 #define PWM_IO          (47)      /* PWM output pin */
 #define PWM_FREQ        (20000)   /* PWM frequency in Hz */
-#define PWM_MIN_DUTY    (5)       /* Minimum PWM duty cycle */
+#define PWM_MIN_DUTY    (10)      /* Minimum PWM duty cycle */
 
 void misc_set_btnWakeFlag(void);
 /* Initialize miscellaneous hardware */
