@@ -811,8 +811,8 @@ esp_err_t cfg_get_image_attr(imgAttr_t *image)
     get_u8(g_userHandle, KEY_IMG_AGC, &image->bAgc, 1);
     get_u8(g_userHandle, KEY_IMG_GAIN, &image->gain, 0);
     get_u8(g_userHandle, KEY_IMG_GAINCEILING, &image->gainCeiling, 0);
-    get_u8(g_userHandle, KEY_IMG_HOR, &image->bHorizonetal, 1);
-    get_u8(g_userHandle, KEY_IMG_VER, &image->bVertical, 1);
+    get_u8(g_userHandle, KEY_IMG_HOR, &image->bHorizonetal, 0);
+    get_u8(g_userHandle, KEY_IMG_VER, &image->bVertical, 0);
     get_u8(g_userHandle, KEY_IMG_FRAMESIZE, &image->frameSize, 14); // default FRAMESIZE_FHD
     get_u8(g_userHandle, KEY_IMG_QUALITY, &image->quality, 12); // default quality 12 (0-63, higher value means lower quality)
     get_u8(g_userHandle, KEY_IMG_HDR, &image->hdrEnable, 0); // default HDR disabled
