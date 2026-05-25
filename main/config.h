@@ -3,13 +3,13 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_log.h"
-#include "nvs_flash.h"
-#include "nvs.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include <esp_log.h>
+#include <nvs_flash.h>
+#include <nvs.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,6 +74,7 @@ extern "C" {
 #define KEY_CAP_TIME_COUNT  "cap:tCount"
 #define KEY_CAP_INTERVAL_V  "cap:iValue"
 #define KEY_CAP_INTERVAL_U  "cap:iUnit"
+#define KEY_CAP_INTERVAL_ANCHOR "cap:iAnchor" // Interval capture anchor time "HH:MM"
 #define KEY_CAP_CAM_WARMUP_MS "cap:camWarmupMs"
 #define KEY_UPLOAD_MODE     "upload:mode"
 #define KEY_UPLOAD_COUNT    "upload:count"
@@ -206,6 +207,7 @@ typedef struct capAttr {
     timedNode_t timedNodes[8]; //use for timed mode
     uint32_t intervalValue; // use for interval mode
     uint8_t  intervalUnit; // use for interval mode. 0: minutes, 1: hours, 2:day
+    char intervalAnchorTime[MAX_LEN_8]; // "HH:MM", used for interval mode
     uint32_t camWarmupMs; // camera warm-up delay in milliseconds
 } capAttr_t;
 
@@ -225,8 +227,8 @@ typedef struct uploadAttr {
 typedef struct mqttAttr {
     char host[MAX_LEN_128];
     char topic[MAX_LEN_128];
-    char user[MAX_LEN_64];
-    char password[MAX_LEN_64];
+    char user[MAX_LEN_128];
+    char password[MAX_LEN_128];
     char clientId[MAX_LEN_128];
     uint32_t port;
     uint8_t qos;
@@ -276,8 +278,8 @@ typedef struct sensingPlatformAttr {
     uint32_t httpPort;
     // non-configurable parameters
     char topic[MAX_LEN_128];
-    char username[MAX_LEN_64];
-    char password[MAX_LEN_64];
+    char username[MAX_LEN_128];
+    char password[MAX_LEN_128];
     char clientId[MAX_LEN_128];
     uint8_t qos;
 } sensingPlatformAttr_t;
@@ -295,8 +297,8 @@ typedef struct mqttPlatformAttr {
     char topic[MAX_LEN_128];
     char clientId[MAX_LEN_128];
     uint8_t qos;
-    char username[MAX_LEN_64];
-    char password[MAX_LEN_64];
+    char username[MAX_LEN_128];
+    char password[MAX_LEN_128];
     uint8_t isConnected;
     uint8_t tlsEnable; // 0: disable, 1: enable
     char caName[MAX_LEN_128];
@@ -390,6 +392,7 @@ void cfg_get_str(const char *key, char *value, size_t length, const char *def);
 void cfg_erase_key(const char *key);
 
 esp_err_t cfg_import(char *data, size_t len);
+esp_err_t cfg_export_userspace_ini(char *buf, size_t buf_sz, size_t *written);
 esp_err_t cfg_user_erase_all();
 esp_err_t cfg_set_firmware_crc32(uint32_t crc);
 uint32_t cfg_get_firmware_crc32();

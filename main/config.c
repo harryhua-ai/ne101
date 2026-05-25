@@ -7,6 +7,8 @@
 #include "utils.h"
 #include "cat1.h"
 #include "camera.h"
+#include "ota.h"
+#include <stdlib.h>
 
 #define NVS_CFG_UNDEFINED "undefined"
 #define NVS_CFG_PARTITION "cfg"
@@ -106,6 +108,13 @@ static esp_err_t namespace_open(const char *namespace, nvs_handle_t *handle)
 static void namespace_close(nvs_handle_t handle)
 {
     nvs_close(handle);
+}
+
+/** Close and reopen userspace handle to discard uncommitted NVS writes after failed import. */
+static esp_err_t cfg_reopen_userspace(void)
+{
+    namespace_close(g_userHandle);
+    return namespace_open(NVS_USER_NAMESPACE, &g_userHandle);
 }
 
 // static esp_err_t user_erase_key(nvs_handle_t handle, const char *key)
@@ -762,7 +771,7 @@ esp_err_t cfg_get_device_info(deviceInfo_t *device)
     get_str(g_userHandle, KEY_DEVICE_NAME, device->name, sizeof(device->name), "NE101 Sensing Camera");
     get_str(g_factoryHandle, KEY_DEVICE_MAC, device->mac, sizeof(device->mac), NULL);
     get_str(g_factoryHandle, KEY_DEVICE_SN, device->sn, sizeof(device->sn), NVS_CFG_UNDEFINED);
-    get_str(g_factoryHandle, KEY_DEVICE_HVER, device->hardVersion, sizeof(device->hardVersion), "V1.0");
+    get_str(g_factoryHandle, KEY_DEVICE_HVER, device->hardVersion, sizeof(device->hardVersion), NVS_CFG_UNDEFINED);
     strncpy(device->softVersion, system_get_version(), sizeof(device->softVersion));
     get_str(g_factoryHandle, KEY_DEVICE_MODEL, device->model, sizeof(device->model), "NE101");
     get_str(g_factoryHandle, KEY_DEVICE_SECRETKEY, device->secretKey, sizeof(device->secretKey), NVS_CFG_UNDEFINED);
@@ -802,8 +811,8 @@ esp_err_t cfg_get_image_attr(imgAttr_t *image)
     get_u8(g_userHandle, KEY_IMG_AGC, &image->bAgc, 1);
     get_u8(g_userHandle, KEY_IMG_GAIN, &image->gain, 0);
     get_u8(g_userHandle, KEY_IMG_GAINCEILING, &image->gainCeiling, 0);
-    get_u8(g_userHandle, KEY_IMG_HOR, &image->bHorizonetal, 1);
-    get_u8(g_userHandle, KEY_IMG_VER, &image->bVertical, 1);
+    get_u8(g_userHandle, KEY_IMG_HOR, &image->bHorizonetal, 0);
+    get_u8(g_userHandle, KEY_IMG_VER, &image->bVertical, 0);
     get_u8(g_userHandle, KEY_IMG_FRAMESIZE, &image->frameSize, 14); // default FRAMESIZE_FHD
     get_u8(g_userHandle, KEY_IMG_QUALITY, &image->quality, 12); // default quality 12 (0-63, higher value means lower quality)
     get_u8(g_userHandle, KEY_IMG_HDR, &image->hdrEnable, 0); // default HDR disabled
@@ -868,6 +877,7 @@ esp_err_t cfg_get_cap_attr(capAttr_t *capture)
     get_u8(g_userHandle, KEY_CAP_TIME_COUNT, &capture->timedCount, 0);
     get_u32(g_userHandle, KEY_CAP_INTERVAL_V, &capture->intervalValue, 8);
     get_u8(g_userHandle, KEY_CAP_INTERVAL_U, &capture->intervalUnit, 1);
+    get_str(g_userHandle, KEY_CAP_INTERVAL_ANCHOR, capture->intervalAnchorTime, sizeof(capture->intervalAnchorTime), "00:00");
     get_u32(g_userHandle, KEY_CAP_CAM_WARMUP_MS, &capture->camWarmupMs, 5000);
     char key[32];
     for (size_t i = 0; i < capture->timedCount; i++) {
@@ -893,6 +903,7 @@ esp_err_t cfg_set_cap_attr(capAttr_t *capture)
     set_u8(g_userHandle, KEY_CAP_TIME_COUNT, capture->timedCount);
     set_u32(g_userHandle, KEY_CAP_INTERVAL_V, capture->intervalValue);
     set_u8(g_userHandle, KEY_CAP_INTERVAL_U, capture->intervalUnit);
+    set_str(g_userHandle, KEY_CAP_INTERVAL_ANCHOR, capture->intervalAnchorTime);
     set_u32(g_userHandle, KEY_CAP_CAM_WARMUP_MS, capture->camWarmupMs);
     char key[32];
     for (size_t i = 0; i < capture->timedCount; i++) {
@@ -1318,39 +1329,161 @@ esp_err_t cfg_import(char *data, size_t len)
         ESP_LOGE(TAG, "Failed to load config data");
         return ESP_FAIL;
     }
-    //debug
-    iniparser_dump(d, stderr);
-    // 1. check model
     const char *model = iniparser_getstring(d, "Hardware:model", NULL);
     if (model == NULL || strcmp(model, "NE101") != 0) {
         ESP_LOGE(TAG, "Invalid config data");
         iniparser_freedict(d);
         return ESP_FAIL;
     }
-    // 2. check key and value
-    size_t n;
-    // size_t size = 0;
-    // char out[32] = {0};
-    for (n = 0 ; n < d->size ; n++) {
+
+    mutex_lock();
+    bool import_ok = true;
+    for (size_t n = 0; n < d->size; n++) {
         if (d->key[n] == NULL || d->val[n] == NULL) {
             continue;
         }
-        // size = sizeof(out);
-        // // not found
-        // if (nvs_get_str(g_userHandle, d->key[n], out, &size) != ESP_OK) {
-        //     ESP_LOGE(TAG, "Invalid key: %s", d->key[n]);
-        //     continue;
-        // }
-        // // same value
-        // if (strcmp(d->val[n], out) == 0) {
-        //     ESP_LOGI(TAG, "Key: %s, value: %s same", d->key[n], d->val[n]);
-        //     continue;
-        // set value
-        // }
+        if (strcmp(d->key[n], "Hardware:model") == 0) {
+            continue;
+        }
+        esp_err_t se = set_str(g_userHandle, d->key[n], d->val[n]);
+        if (se != ESP_OK) {
+            ESP_LOGE(TAG, "Import set_str failed key=%s err=%s", d->key[n], esp_err_to_name(se));
+            import_ok = false;
+            break;
+        }
         ESP_LOGI(TAG, "Importing key: %s, value: %s", d->key[n], d->val[n]);
-        set_str(g_userHandle, d->key[n], d->val[n]);
     }
+    esp_err_t out = ESP_OK;
+    if (import_ok) {
+        out = commit_cfg(g_userHandle);
+        if (out != ESP_OK) {
+            ESP_LOGE(TAG, "Import commit failed: %s", esp_err_to_name(out));
+            import_ok = false;
+        }
+    }
+    if (!import_ok) {
+        if (cfg_reopen_userspace() != ESP_OK) {
+            ESP_LOGE(TAG, "cfg_reopen_userspace failed after import error");
+        }
+        out = ESP_FAIL;
+    }
+    mutex_unlock();
     iniparser_freedict(d);
+    return out;
+}
+
+#define CFG_EXPORT_MAX_KEYS 200
+
+static int cmp_nvs_keys(const void *a, const void *b)
+{
+    return strcmp((const char *)a, (const char *)b);
+}
+
+esp_err_t cfg_export_userspace_ini(char *buf, size_t buf_sz, size_t *written)
+{
+    if (buf == NULL || written == NULL || buf_sz < 128) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    *written = 0;
+
+    char keys[CFG_EXPORT_MAX_KEYS][NVS_KEY_NAME_MAX_SIZE];
+    int nkeys = 0;
+
+    mutex_lock();
+    nvs_iterator_t it = NULL;
+    esp_err_t ret = nvs_entry_find(NVS_CFG_PARTITION, NVS_USER_NAMESPACE, NVS_TYPE_STR, &it);
+    if (ret == ESP_OK) {
+        while (ret == ESP_OK) {
+            nvs_entry_info_t info;
+            nvs_entry_info(it, &info);
+            if (info.type == NVS_TYPE_STR) {
+                if (nkeys >= CFG_EXPORT_MAX_KEYS) {
+                    nvs_release_iterator(it);
+                    mutex_unlock();
+                    return ESP_ERR_NO_MEM;
+                }
+                strncpy(keys[nkeys], info.key, sizeof(keys[0]) - 1);
+                keys[nkeys][sizeof(keys[0]) - 1] = '\0';
+                nkeys++;
+            }
+            ret = nvs_entry_next(&it);
+        }
+        nvs_release_iterator(it);
+        if (ret != ESP_ERR_NVS_NOT_FOUND) {
+            mutex_unlock();
+            return ret;
+        }
+    } else if (ret != ESP_ERR_NVS_NOT_FOUND) {
+        mutex_unlock();
+        return ret;
+    }
+
+    if (nkeys > 0) {
+        qsort(keys, (size_t)nkeys, sizeof(keys[0]), cmp_nvs_keys);
+    }
+
+    size_t pos = 0;
+    int sn = snprintf(buf + pos, buf_sz - pos,
+                      "# NE101 configuration (userspace NVS). MQTT TLS cert files on device are NOT included.\r\n"
+                      "[Hardware]\r\n"
+                      "model = NE101\r\n");
+    if (sn < 0 || (size_t)sn >= buf_sz - pos) {
+        mutex_unlock();
+        return ESP_ERR_NO_MEM;
+    }
+    pos += (size_t)sn;
+
+    char prev_sec[64] = "";
+    for (int i = 0; i < nkeys; i++) {
+        const char *k = keys[i];
+        size_t vlen = 0;
+        if (nvs_get_str(g_userHandle, k, NULL, &vlen) != ESP_OK) {
+            continue;
+        }
+        char *vbuf = (char *)malloc(vlen);
+        if (vbuf == NULL) {
+            mutex_unlock();
+            return ESP_ERR_NO_MEM;
+        }
+        if (nvs_get_str(g_userHandle, k, vbuf, &vlen) != ESP_OK) {
+            free(vbuf);
+            continue;
+        }
+        const char *colon = strchr(k, ':');
+        char sec[48];
+        char subkey[48];
+        if (colon != NULL && colon != k) {
+            size_t sl = (size_t)(colon - k);
+            if (sl >= sizeof(sec)) {
+                sl = sizeof(sec) - 1;
+            }
+            memcpy(sec, k, sl);
+            sec[sl] = '\0';
+            strncpy(subkey, colon + 1, sizeof(subkey) - 1);
+            subkey[sizeof(subkey) - 1] = '\0';
+        } else {
+            strncpy(sec, "kv", sizeof(sec) - 1);
+            sec[sizeof(sec) - 1] = '\0';
+            strncpy(subkey, k, sizeof(subkey) - 1);
+            subkey[sizeof(subkey) - 1] = '\0';
+        }
+        int add;
+        if (strcmp(prev_sec, sec) != 0) {
+            add = snprintf(buf + pos, buf_sz - pos, "\r\n[%s]\r\n%s = %s\r\n", sec, subkey, vbuf);
+            strncpy(prev_sec, sec, sizeof(prev_sec) - 1);
+            prev_sec[sizeof(prev_sec) - 1] = '\0';
+        } else {
+            add = snprintf(buf + pos, buf_sz - pos, "%s = %s\r\n", subkey, vbuf);
+        }
+        free(vbuf);
+        if (add < 0 || (size_t)add >= buf_sz - pos) {
+            mutex_unlock();
+            return ESP_ERR_NO_MEM;
+        }
+        pos += (size_t)add;
+    }
+    mutex_unlock();
+    *written = pos;
     return ESP_OK;
 }
 

@@ -131,6 +131,37 @@ static uint32_t convert_interval_to_seconds(uint32_t intervalValue, uint8_t inte
 }
 
 /**
+ * Parse "HH:MM" anchor time.
+ * @return true on success.
+ */
+static bool parse_anchor_hhmm(const char *hhmm, int *out_hour, int *out_min)
+{
+    if (!hhmm || !out_hour || !out_min) {
+        return false;
+    }
+    int h = 0, m = 0;
+    if (sscanf(hhmm, "%2d:%2d", &h, &m) != 2) {
+        return false;
+    }
+    if (h < 0 || h > 23 || m < 0 || m > 59) {
+        return false;
+    }
+    *out_hour = h;
+    *out_min = m;
+    return true;
+}
+
+static time_t make_local_anchor_today(time_t now, int anchor_hour, int anchor_min)
+{
+    struct tm tm_now;
+    localtime_r(&now, &tm_now);
+    tm_now.tm_hour = anchor_hour;
+    tm_now.tm_min = anchor_min;
+    tm_now.tm_sec = 0;
+    return mktime(&tm_now);
+}
+
+/**
  * Calculate capture wakeup time
  * @param capture Capture configuration
  * @param lastCapTime Last capture timestamp
@@ -157,27 +188,102 @@ static uint32_t calculate_capture_wakeup(const capAttr_t *capture, time_t lastCa
             return 0;
         }
 
-        ESP_LOGD(TAG, "Capture interval mode: %lu seconds", interval_sec);
-
-        // Handle missed captures
-        if (lastCapTime && lastCapTime > 0) {
-            if (now >= lastCapTime + interval_sec) {
-                ESP_LOGI(TAG, "Missed capture window, triggering immediate capture");
-                return 1; // Capture immediately if missed window
-            } else {
-                uint32_t next_capture = lastCapTime + interval_sec - now;
-                ESP_LOGD(TAG, "Next capture in %lu seconds", next_capture);
-                return next_capture; // Time until next capture
-            }
-        }
-        
         // Force immediate capture if last snapshot failed
         if (camera_is_snapshot_fail()) {
             ESP_LOGI(TAG, "Last snapshot failed, triggering immediate retry");
             return 1; 
         }
-        
-        return interval_sec;
+
+        int anchor_hour = 0;
+        int anchor_min = 0;
+        bool anchor_ok = parse_anchor_hhmm(capture->intervalAnchorTime, &anchor_hour, &anchor_min);
+
+        ESP_LOGD(TAG, "Capture interval mode: %lu seconds, unit=%d, anchor=%s (ok=%d)",
+                 interval_sec, capture->intervalUnit, capture->intervalAnchorTime, anchor_ok);
+
+        // If no valid anchor is provided, keep legacy behavior (based on last capture time).
+        if (!anchor_ok) {
+            // Handle missed captures
+            if (lastCapTime && lastCapTime > 0) {
+                if (now >= lastCapTime + interval_sec) {
+                    ESP_LOGI(TAG, "Missed capture window (legacy), triggering immediate capture");
+                    return 1; // Capture immediately if missed window
+                } else {
+                    uint32_t next_capture = lastCapTime + interval_sec - now;
+                    ESP_LOGD(TAG, "Next capture (legacy) in %lu seconds", next_capture);
+                    return next_capture; // Time until next capture
+                }
+            }
+            return interval_sec;
+        }
+
+        // Anchor-aligned scheduling.
+        // - For minutes/hours: fixed grid every interval_sec within each 24h window
+        //   [period_start, period_start+24h) where period_start is the latest anchor <= now.
+        //   So slots continue across local midnight until the next anchor (e.g. 14:00).
+        // - For days: schedule at anchor time every N days based on lastCapTime.
+        time_t anchor_today = make_local_anchor_today(now, anchor_hour, anchor_min);
+
+        if (capture->intervalUnit == 2) {
+            // Days: every N days at anchor HH:MM.
+            const time_t day_sec = 24 * 60 * 60;
+            uint32_t n_days = capture->intervalValue;
+            if (n_days == 0) return 0;
+
+            time_t next_anchor = 0;
+            if (lastCapTime <= 0) {
+                // First run: next is today's anchor if not passed, otherwise tomorrow's anchor.
+                next_anchor = (now < anchor_today) ? anchor_today : (anchor_today + day_sec);
+            } else {
+                // Use lastCapTime as baseline, but align baseline to the nearest anchor at/before lastCapTime.
+                time_t base = make_local_anchor_today(lastCapTime, anchor_hour, anchor_min);
+                if (lastCapTime < base) {
+                    base -= day_sec;
+                }
+                next_anchor = base + (time_t)n_days * day_sec;
+
+                // If we are already past the computed next anchor, advance by N days until it's in the future.
+                while (next_anchor <= now) {
+                    next_anchor += (time_t)n_days * day_sec;
+                }
+
+                // Missed window detection: if we should have triggered at/after base but lastCapTime is behind the last scheduled anchor.
+                // Compute the most recent scheduled anchor <= now, and if lastCapTime is before it, trigger immediately.
+                time_t last_sched = next_anchor;
+                while (last_sched > now) {
+                    last_sched -= (time_t)n_days * day_sec;
+                }
+                if (last_sched > 0 && lastCapTime > 0 && lastCapTime < last_sched) {
+                    ESP_LOGI(TAG, "Missed capture window (day/anchor), triggering immediate capture");
+                    return 1;
+                }
+            }
+
+            uint32_t wait_sec = (next_anchor > now) ? (uint32_t)(next_anchor - now) : 1;
+            return MAX(wait_sec, 1);
+        }
+
+        // Minutes/hours: rolling 24h window aligned to anchor (not calendar midnight).
+        const time_t day_sec = 24 * 60 * 60;
+        time_t period_start = (now >= anchor_today) ? anchor_today : (anchor_today - day_sec);
+        time_t period_end = period_start + day_sec;
+
+        time_t elapsed = now - period_start;
+        uint32_t k = (uint32_t)(elapsed / (time_t)interval_sec) + 1;
+        time_t next = period_start + (time_t)k * (time_t)interval_sec;
+        if (next >= period_end) {
+            next = period_end;
+        }
+
+        if (lastCapTime > 0) {
+            time_t last_grid = period_start + (elapsed / (time_t)interval_sec) * (time_t)interval_sec;
+            if (last_grid > 0 && lastCapTime < last_grid) {
+                ESP_LOGI(TAG, "Missed capture window (min/hour anchor), triggering immediate capture");
+                return 1;
+            }
+        }
+
+        return MAX((uint32_t)(next - now), 1);
     } else if (capture->scheCapMode == 0) {
         // Time-based capture mode
         if (capture->timedCount == 0) {
@@ -357,8 +463,13 @@ void sleep_start(void)
     cfg_get_cap_attr(&capture);
     time(&now);
     misc_show_time("now sleep at", now);
+
+    /* Ensure all LEDs are off before entering deep sleep. */
+    misc_led_off();
+    misc_flash_led_close();
     
-    // Calculate wakeup time
+    // Calculate and set timer wakeup
+    
     int wakeup_time_sec = 0;
 
     if (sleep_has_wakeup_todo()) {

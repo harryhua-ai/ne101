@@ -12,7 +12,10 @@ function getData(url = "") {
             if (response.ok) return response.json();
             else return Promise.reject(response.json());
         })
-        .catch((error) => console.error(error));
+        .catch((error) => {
+            console.error(error);
+            return Promise.reject(error);
+        });
 }
 function postData(url = "", data = {}) {
     return fetch(url, {
@@ -105,6 +108,8 @@ const URL = {
     setDevSleep: baseUrl + "/system/setDevSleep",
     setDevTime: baseUrl + "/system/setDevTime",
     exportSessionLog: baseUrl + "/system/exportSessionLog",
+    exportConfig: baseUrl + "/system/exportConfig",
+    importConfig: baseUrl + "/system/importConfig",
 
     // Cellular
     getCellularParam: baseUrl + "/network/getCellularParam",

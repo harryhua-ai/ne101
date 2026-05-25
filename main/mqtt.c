@@ -190,6 +190,7 @@ char *push_build_json_payload(queueNode_t *node)
     deviceInfo_t device;
     char *snapType = NULL;
     char time_str[32];
+    char upload_time_str[32];
     char header[] = "data:image/jpeg;base64,";
 
     switch (node->type) {
@@ -229,6 +230,8 @@ char *push_build_json_payload(queueNode_t *node)
     cfg_get_device_info(&device);
     time_t t = node->pts / 1000;
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", localtime(&t));
+    time_t upload_t = time(NULL);
+    strftime(upload_time_str, sizeof(upload_time_str), "%Y-%m-%d %H:%M:%S", localtime(&upload_t));
 
     cJSON *json = cJSON_CreateObject();
     cJSON *subJson = cJSON_CreateObject();
@@ -241,6 +244,7 @@ char *push_build_json_payload(queueNode_t *node)
     cJSON_AddNumberToObject(subJson, "batteryVoltage", misc_get_battery_voltage());
     cJSON_AddStringToObject(subJson, "snapType", snapType);
     cJSON_AddStringToObject(subJson, "localtime", time_str);
+    cJSON_AddStringToObject(subJson, "uploadtime", upload_time_str);
     cJSON_AddNumberToObject(subJson, "imageSize", picSize + strlen(header));
     cJSON_AddStringToObject(subJson, "image", (char *)g_MQ.sendBuf);
     cJSON_AddNumberToObject(json, "ts", node->pts);
