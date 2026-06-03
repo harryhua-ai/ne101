@@ -97,6 +97,7 @@ extern "C" {
 #define KEY_MQTT_KEY_NAME   "mqtt:keyName"
 #define KEY_WIFI_SSID       "wifi:ssid"
 #define KEY_WIFI_PASSWORD   "wifi:password"
+#define KEY_WIFI_AP_IP      "wifi:apIp"
 #define KEY_IOT_AUTOP       "iot:autop"
 #define KEY_IOT_DM          "iot:dm"
 #define KEY_IOT_AUTOP_DONE  "iot:autoPdone"
@@ -140,6 +141,7 @@ typedef struct deviceInfo {
     char countryCode[MAX_LEN_3];
     char netmod[MAX_LEN_8];
     char camera[MAX_LEN_8];
+    char apIp[MAX_LEN_16];
 } deviceInfo_t;
 
 /**

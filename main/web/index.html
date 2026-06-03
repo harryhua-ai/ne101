@@ -1011,7 +1011,7 @@
                         </div>
                         <div class="card-item">
                             <span class="card-item-label"></span>
-                            <span class="card-item-content item-button">
+                            <span class="card-item-content item-button device-card-actions">
                                 <button
                                     type="button"
                                     class="plain device-card-action-btn"
@@ -1051,7 +1051,7 @@
                         </div>
                         <div class="card-item">
                             <span class="card-item-label"></span>
-                            <span class="card-item-content item-button">
+                            <span class="card-item-content item-button device-card-actions">
                                 <button
                                     type="button"
                                     class="plain device-card-action-btn"
@@ -1119,6 +1119,32 @@
                                 <span> {{ macAddress }} </span>
                             </span>
                         </div>
+                        <div class="card-item flex-start">
+                            <span class="card-item-label">{{ $t("sys.apAddress") }}
+                                <span class="icon" @click="showTipsDialog($t('sys.apAddressTip'))">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#888">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm2 13h-4v-2h1v-4h-1v-2h3v6h1v2z"/>
+                                    </svg>
+                                </span>
+                            </span>
+                            <span class="card-item-content">
+                                <input
+                                    type="text"
+                                    v-model="apIp"
+                                    @input="inputApIpLimit()"
+                                    @blur="setApIp($el)"
+                                    maxlength="15"
+                                    placeholder="192.168.1.1"
+                                />
+                                <div
+                                    class="error-input"
+                                    name="error-tip"
+                                    v-show="apIpError"
+                                >
+                                    {{ $t("sys.invalidIpv4") }}
+                                </div>
+                            </span>
+                        </div>
                         <div class="card-item">
                             <span class="card-item-label"
                                 >{{ $t("sys.SN") }}</span
@@ -1156,7 +1182,7 @@
                             <span class="card-item-label"
                                 >{{ $t("sys.upgradeFirmware") }}</span
                             >
-                            <span class="card-item-content">
+                            <span class="card-item-content device-card-actions">
                                 <button
                                     type="button"
                                     class="plain device-card-action-btn"
@@ -1176,8 +1202,8 @@
                             <span class="card-item-label"
                                 >{{ $t("sys.configuration") }}</span
                             >
-                            <span class="card-item-content">
-                                <!-- buttons first so .device-card button:nth-child(1) matches export (same as Browse row) -->
+                            <span class="card-item-content device-card-actions">
+                                <!-- buttons right-aligned with wlan refresh -->
                                 <button
                                     type="button"
                                     class="plain device-card-action-btn"
@@ -1208,7 +1234,7 @@
                                 >{{ $t("sys.exportSessionLog") }}</span
                             >
                             <span
-                                class="card-item-content device-card-log-download"
+                                class="card-item-content device-card-actions device-card-log-download"
                             >
                                 <button
                                     type="button"
@@ -1422,7 +1448,7 @@
                         </div>
                         <div class="card-item">
                             <span class="card-item-label"></span>
-                            <span class="card-item-content item-button">
+                            <span class="card-item-content item-button device-card-actions">
                                 <button
                                     type="button"
                                     class="plain device-card-action-btn"
@@ -1477,6 +1503,14 @@
                             @click="handleSleepMode"
                         >
                             {{ $t("sleepMode") }}
+                        </button>
+                        <button
+                            type="button"
+                            class="plain"
+                            id="btn-reset"
+                            @click="handleSystemReset"
+                        >
+                            {{ $t("systemReset") }}
                         </button>
                     </footer>
                     <!-- basic dialog component call -->

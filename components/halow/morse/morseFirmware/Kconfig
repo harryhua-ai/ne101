@@ -1,0 +1,84 @@
+# Copyright 2024-2026 Morse Micro
+# SPDX-License-Identifier: Apache-2.0
+menu "Morse Micro Firmware Configuration"
+    config MM_BCF_FILE
+        string "Morse Micro Board Configuration File"
+        default "bcf_fgh100mhaamd.mbin"
+        help
+            Set the name of the BCF (Board Configuration File) to use.
+            Example valid filenames include:
+              - bcf_mf08651_us.mbin
+              - bcf_mf08551.mbin
+              - bcf_mf08251.mbin
+              - bcf_mf03120.mbin
+
+            This file provides board-specific configuration data for the Morse Micro chip/module.
+
+            The build system will search for the specified file in the following locations:
+              1. firmware/ in the root of the application being built
+
+            If the file is not found in either location, a warning will be reported during
+            configuration.
+
+    config MM_BCF_MULTI
+        bool "Embed multiple BCFs (N entries) and select by country code"
+        default n
+        help
+            When enabled, the build will embed multiple BCF (Board Configuration File) images
+            into the MCU application. The application selects which BCF to present to morselib
+            at runtime before mmwlan_init()/mmwlan_boot() based on the configured country code.
+
+            This scales beyond FCC/CE and supports adding new variants like JP without
+            adding more Kconfig options and build logic each time.
+
+    config MM_BCF_EMBEDDED_LIST
+        string "Embedded BCF list: id:file,id:file,..."
+        depends on MM_BCF_MULTI
+        default "fcc:bcf_fgh100mabmd.mbin,ce:bcf_fgh100maamd.mbin"
+        help
+            Comma-separated list of embedded BCFs. Each entry is "id:file".
+            - id  : short identifier used by the country map (e.g. fcc, ce, jp)
+            - file: BCF mbin filename under the morseFirmware blob directory.
+
+            Example: "fcc:bcf_xxx.mbin,ce:bcf_yyy.mbin,jp:bcf_zzz.mbin"
+
+    config MM_BCF_COUNTRY_MAP
+        string "Country to BCF id map: CC=id,CC=id,..."
+        depends on MM_BCF_MULTI
+        default "AU=fcc,KR=fcc,NZ=fcc,SG=fcc,US=fcc,EU=ce,IN=ce"
+        help
+            Comma-separated map from ISO 3166-1 alpha-2 country codes to a BCF id.
+            Example: "US=fcc,EU=ce,JP=jp".
+
+    config MM_BCF_DEFAULT_ID
+        string "Default BCF id (when country not mapped)"
+        depends on MM_BCF_MULTI
+        default "fcc"
+        help
+            If a country code is not present in MM_BCF_COUNTRY_MAP, this id is used.
+
+    config MM_FW_FILE
+        string "Morse Micro Firmware File"
+        default "mm6108.mbin"
+        help
+            This is the firmware file for the Morse Micro chip/module.
+
+            The build system will search for the specified file in the following locations:
+              1. firmware/ in the root of the application being built
+
+            If the file is not found in either location, a warning will be reported during
+            configuration.
+
+    choice MMHAL_CHIP_TYPE
+        bool "Morse Micro Chip Variant"
+        default MMHAL_CHIP_TYPE_MM6108
+        help
+            This specifies which chip function ops should be used by morselib.
+
+        config MMHAL_CHIP_TYPE_MM6108
+            bool "mmhal_mm6108"
+        config MMHAL_CHIP_TYPE_MM8108
+            bool "mmhal_mm8108"
+    endchoice
+
+endmenu

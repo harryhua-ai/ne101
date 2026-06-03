@@ -16,6 +16,7 @@ extern "C" {
     }
 
 #define MAX_SCAN_ITEM_COUNT   (128)
+#define MM_WIFI_CONNECT_TIMEOUT_MS (20000)
 
 typedef struct scan_item {
     /** RSSI of the received frame. */

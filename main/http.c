@@ -708,6 +708,7 @@ esp_err_t get_dev_info_handle(httpd_req_t *req)
     s2j_json_set_basic_element(json_obj, &device, string, countryCode);
     s2j_json_set_basic_element(json_obj, &device, string, netmod);
     s2j_json_set_basic_element(json_obj, &device, string, camera);
+    s2j_json_set_basic_element(json_obj, &device, string, apIp);
     str = cJSON_PrintUnformatted(json_obj);
     httpd_resp_sendstr(req, str);
     cJSON_free(str);
@@ -733,6 +734,7 @@ esp_err_t set_dev_info_handle(httpd_req_t *req)
         s2j_struct_get_basic_element(device, json, string, softVersion);
         s2j_struct_get_basic_element(device, json, string, model);
         s2j_struct_get_basic_element(device, json, string, countryCode);
+        s2j_struct_get_basic_element(device, json, string, apIp);
 
         if (netModule_is_mmwifi()) {
             mm_wifi_set_country_code(device->countryCode);
@@ -1239,6 +1241,17 @@ esp_err_t set_dev_sleep_handle(httpd_req_t *req)
     clear_timeout();
     http_send_json_response(req, RES_OK);
     sleep_set_event_bits(SLEEP_NO_OPERATION_TIMEOUT_BIT);
+    return ESP_OK;
+}
+
+esp_err_t set_dev_reset_handle(httpd_req_t *req)
+{
+    ESP_LOGI(TAG, "%s", req->uri);
+    clear_timeout();
+    http_send_json_response(req, RES_OK);
+    vTaskDelay(pdMS_TO_TICKS(300));
+    system_reset();
+    system_restart();
     return ESP_OK;
 }
 
@@ -1961,6 +1974,11 @@ static const httpd_uri_t g_webHandlers[] = {
         .uri = "/api/v1/system/setDevSleep",
         .method = HTTP_POST,
         .handler = set_dev_sleep_handle,
+    },
+    {
+        .uri = "/api/v1/system/setDevReset",
+        .method = HTTP_POST,
+        .handler = set_dev_reset_handle,
     },
     {
         .uri = "/api/v1/system/setDevUpgrade",

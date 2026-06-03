@@ -101,6 +101,9 @@
     "deviceMainte": "Device Maintenance",
     "deviceName": "Device Name",
     "macAddress": "MAC Address",
+    "apAddress": "AP Address",
+    "apAddressTip": "Local IP address, takes effect after next restart",
+    "invalidIpv4": "Please enter a valid IPv4 address",
     "SN": "SN",
     "battery": "Battery",
     "typecPowered": "Type-c powered",
@@ -143,7 +146,9 @@
     "region": "Region"
   },
   "sleepMode": "Sleep Mode",
-  "sleerModeTips": "Device is about to go into Sleep Mode.",
+  "sleerModeTips": "Device is about to go into Sleep Mode？",
+  "systemReset": "System Reset",
+  "systemResetTips": "Reset user configuration and restart?",
   "requiredField": "Required Field.",
   "vaildRange1-65535": "Vaild range：1~65535",
   "vaildRange1-999": "Vaild range：1~999",
@@ -215,7 +220,7 @@
     "pingTest": "Ping Test",
     "pingHostPlaceholder": "Host or IP",
     "ping": "Ping",
-    "pinging": "Pinging...",
+    "pinging": "Pinging",
     "pingError": "Ping failed",
     "back": "Back"
   }

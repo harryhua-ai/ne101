@@ -42,6 +42,8 @@ function Device() {
         netmod: "", // network mode wifi cat1 halow
         deviceName: "",
         macAddress: "",
+        apIp: "192.168.1.1",
+        apIpError: false,
         sn: "",
         battery: "",
         hardwareVer: "",
@@ -60,17 +62,14 @@ function Device() {
             this.netmod = res.netmod;
             this.deviceName = res.name;
             this.macAddress = res.mac;
+            this.apIp = res.apIp || "192.168.1.1";
             this.sn = res.sn;
             this.hardwareVer = res.hardVersion;
             this.firmwareVer = res.softVersion;
             this.countryCode = res.countryCode;
             this.camera = res.camera;
-            const softType = Number(res.softVersion.split('.')[1])
-            if (res.softVersion.indexOf("FCC") !== -1) {
-                this.regionOptions = this.regionOptionsForFcc 
-            } else if(res.softVersion.indexOf("CE") !== -1) {
-                this.regionOptions = this.regionOptionsForCe // NE_101.2.0.1 CE
-            }
+            // Always show the web-supported country list (no FCC/CE grouping in UI).
+            this.regionOptions = this.regionOptionsAll || [];
             const { freePercent, bBattery } = await getData(URL.getDevBattery);
             if (bBattery) {
                 this.battery = freePercent + "%";
@@ -99,6 +98,31 @@ function Device() {
                     this.alertMessage("error");
                 }
                 
+            }
+        },
+        checkIpv4(val) {
+            return /^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)$/.test(val);
+        },
+        inputApIpLimit() {
+            let tmpValue = this.apIp.toString().replace(/[^\d.]/g, "");
+            const parts = tmpValue.split(".").slice(0, 4).map((part) => part.slice(0, 3));
+            tmpValue = parts.join(".");
+            nextTick(() => {
+                this.apIp = tmpValue;
+            });
+        },
+        async setApIp($el) {
+            const valid = this.checkIpv4(this.apIp);
+            this.apIpError = !valid;
+            if (!valid) {
+                return;
+            }
+            try {
+                await postData(URL.setDevInfo, {
+                    apIp: this.apIp,
+                });
+            } catch (error) {
+                this.alertMessage("error");
             }
         },
         async setNtpSync() {

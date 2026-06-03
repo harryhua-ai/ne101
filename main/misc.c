@@ -34,8 +34,17 @@
 #include "pir.h"
 #include "http.h"
 #include "wifi.h"
+#include "net_module.h"
+#include "morse_dpp_cli.h"
+#include "push.h"
 
 #define TAG "-->MISC"
+
+/** blink_cnt value: toggle until timer stopped or a finite blink completes */
+#define MISC_LED_BLINK_FOREVER  (255U)
+
+#define DPP_PB_TASK_STACK   (6 * 1024)
+#define DPP_PB_TASK_PRIO    (5)
 
 #define LIGHT_DET_ADC1_CHN      (ADC_CHANNEL_0)
 #define BATTERY_DET_ADC2_CHN    (ADC_CHANNEL_3)
@@ -141,11 +150,48 @@ static void button_single_click_cb(void *arg, void *priv)
     }
 }
 
+static void dpp_pb_task(void *arg)
+{
+    uint32_t timeout_ms = (uint32_t)(uintptr_t) arg;
+
+    push_stop();
+    esp_err_t rc = morse_dpp_pb_run(timeout_ms);
+
+    uint8_t result_blinks = (rc == ESP_OK) ? 3 : 5;
+    uint16_t result_interval = (rc == ESP_OK) ? 300 : 150;
+    misc_led_blink(result_blinks, result_interval);
+    vTaskDelay(pdMS_TO_TICKS((uint32_t) result_blinks * 2U * result_interval + result_interval));
+
+    if (system_get_mode() == MODE_CONFIG) {
+        misc_led_able(1);
+    }
+    vTaskDelete(NULL);
+}
+
 static void button_double_click_cb(void *arg, void *priv)
 {
     ESP_LOGI(TAG, "BUTTON_DOUBLE_CLICK");
-    storage_show_file();
-    system_show_meminfo();
+
+    if (!netModule_is_mmwifi()) {
+        storage_show_file();
+        system_show_meminfo();
+        return;
+    }
+
+    if (system_get_mode() == MODE_CONFIG) {
+        /* Network is already up in config mode; run DPP in a worker task. */
+        misc_led_blink(0, 500);
+        if (xTaskCreate(dpp_pb_task, "dpp_pb", DPP_PB_TASK_STACK,
+                        (void *)(uintptr_t) MORSE_DPP_PB_DEFAULT_TIMEOUT_MS,
+                        DPP_PB_TASK_PRIO, NULL) != pdPASS) {
+            ESP_LOGE(TAG, "failed to create dpp_pb task");
+            misc_led_blink(5, 150);
+        }
+        return;
+    }
+
+    /* From schedule/upload/snapshot: reboot into dedicated DPP mode. */
+    system_set_temporary_mode(MODE_DPP);
 }
 
 static void button_long_press_start_cb(void *arg, void *priv)
@@ -156,9 +202,12 @@ static void button_long_press_start_cb(void *arg, void *priv)
 
 static void button_long_press_hold_cb(void *arg, void *priv)
 {
-    ESP_LOGI(TAG, "BUTTON_LONG_PRESS_HOLD");
-    if(g_misc.reset_flag != 1 && ((esp_timer_get_time() - g_misc.btn.press_time) > BUTTON_RESET_TIME)){
-        /*LED is controlled by timer, button callback is also processed in timer, so it is necessary to exit the callback. So put the restart event on task.*/
+    if (g_misc.reset_flag == 1) {
+        return;
+    }
+    if ((esp_timer_get_time() - g_misc.btn.press_time) > BUTTON_RESET_TIME) {
+        ESP_LOGI(TAG, "BUTTON_LONG_PRESS_HOLD, factory reset armed");
+        /* LED is driven by timer; defer reset to misc_task on BUTTON_PRESS_UP. */
         misc_led_blink(5, 200);
         g_misc.reset_flag = 1;
         g_misc.btn.press_time = esp_timer_get_time();
@@ -557,7 +606,12 @@ void misc_led_off(void)
 void misc_led_blink(uint8_t blink_cnt,  uint16_t blink_interval)
 {
     xSemaphoreTake(g_misc.led.mutex, portMAX_DELAY);
+    /* Release CONFIG "hold on" so PWM can follow blink timer. */
+    g_misc.led.hold_on = 0;
     g_misc.led.light_state = 1;
+    if (blink_cnt == 0) {
+        blink_cnt = MISC_LED_BLINK_FOREVER;
+    }
     g_misc.led.blink_cnt = blink_cnt;
 
     if(g_misc.led.timer_state == 1)
@@ -575,8 +629,10 @@ static void pwm_timer_cb(void *arg)
         g_misc.led.light_state = 1;
         g_misc.led.light_update = 1;
     }else if(g_misc.led.light_state == 1){
-        if(g_misc.led.blink_cnt > 0 )
+        if (g_misc.led.blink_cnt > 0 &&
+            g_misc.led.blink_cnt != MISC_LED_BLINK_FOREVER) {
             g_misc.led.blink_cnt--;
+        }
         g_misc.led.light_state = 0;
     }
     xSemaphoreGive(g_misc.led.mutex);
@@ -677,7 +733,8 @@ static void misc_task()
 {
     while (true) {
         xSemaphoreTake(g_misc.led.mutex, portMAX_DELAY);
-        if(g_misc.led.timer_state == 1 && g_misc.led.blink_cnt == 0){ //Turn off the timer
+        /* Finite blink finished (forever mode uses MISC_LED_BLINK_FOREVER, never 0). */
+        if (g_misc.led.timer_state == 1 && g_misc.led.blink_cnt == 0) {
             esp_timer_stop(g_misc.led.timer);
             g_misc.led.timer_state = 0;
         }

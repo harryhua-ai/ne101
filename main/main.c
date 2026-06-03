@@ -43,6 +43,7 @@
 #include "utils.h"
 #include "storage.h"
 #include "session_log.h"
+#include "morse_dpp_cli.h"
 
 #define TAG "-->MAIN"
 
@@ -352,6 +353,7 @@ static void common_init(void)
     srand(esp_random());
 
     debug_open();
+    morse_dpp_cli_init();
     cfg_init();
     sleep_open();
     iot_mip_init();
@@ -441,6 +443,28 @@ static void handle_upload_mode(void)
     netModule_open(main_mode);
     system_upload_todo();
     sleep_wait_event_bits(SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_MIP_DONE_BIT, true);
+}
+
+/**
+ * @brief HaLow DPP push-button provisioning (entered via button double-click).
+ */
+static void handle_dpp_mode(void)
+{
+    ESP_LOGI(TAG, "dpp mode");
+
+    misc_led_blink(0, 500);
+    netModule_open(main_mode);
+
+    esp_err_t rc = morse_dpp_pb_run(MORSE_DPP_PB_DEFAULT_TIMEOUT_MS);
+    if (rc == ESP_OK) {
+        misc_led_blink(3, 300);
+    } else {
+        ESP_LOGW(TAG, "DPP PB failed: %s", esp_err_to_name(rc));
+        misc_led_blink(5, 150);
+    }
+
+    sleep_set_event_bits(SLEEP_NO_OPERATION_TIMEOUT_BIT);
+    sleep_wait_event_bits(SLEEP_NO_OPERATION_TIMEOUT_BIT, false);
 }
 
 
@@ -536,8 +560,11 @@ void app_main(void)
         case MODE_UPLOAD:
             handle_upload_mode();
             break;
-            
-            
+
+        case MODE_DPP:
+            handle_dpp_mode();
+            break;
+
         default:
             ESP_LOGE(TAG, "Unknown mode: %d", main_mode);
             break;

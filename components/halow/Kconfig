@@ -1,0 +1,28 @@
+# Copyright 2025-2026 Morse Micro
+# SPDX-License-Identifier: Apache-2.0
+
+rsource "morse/morseFirmware/Kconfig"
+rsource "morse/mmpktmem/Kconfig"
+rsource "morse/shims/Kconfig"
+rsource "morse/regdb/Kconfig"
+rsource "morse/morselib/Kconfig"
+
+menu "Wi-Fi HaLow Connection Manager"
+
+    config WIFI_HALOW
+        bool "Enable Morse Micro Wi-Fi HaLow support"
+        default y
+        select MBEDTLS_NIST_KW_C
+
+    config HALOW_COUNTRY_CODE
+        string "Country code to use for Wi-Fi HaLow"
+        default "AU"
+
+	config HALOW_PS_MODE
+		bool "Enable Morse Micro HaLow Powersave Mode"
+		default false
+		help
+			This can only be set to true for devices which have the BUSY and WAKE
+			pins connected.
+
+endmenu

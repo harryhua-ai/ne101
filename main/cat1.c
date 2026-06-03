@@ -1216,8 +1216,8 @@ static int cat1_restart_cmd(int argc, char **argv)
     return ESP_OK;
 }
 static esp_console_cmd_t g_cmd[] = {
-    {"atsend", "atsend [at_command]", NULL, cat1_atsend_cmd, NULL},
-    {"cat1restart", "cat1restart", NULL, cat1_restart_cmd, NULL},
+    ESP_CONSOLE_CMD_INIT("atsend", "atsend [at_command]", NULL, cat1_atsend_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("cat1restart", "cat1restart", NULL, cat1_restart_cmd, NULL),
 };
 
 void cat1_cmd_add(void)

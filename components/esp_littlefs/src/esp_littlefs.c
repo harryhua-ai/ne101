@@ -390,7 +390,7 @@ esp_err_t esp_littlefs_format(const char* partition_label) {
             return ESP_FAIL;
         }
         efs->cache_size = CONFIG_LITTLEFS_FD_CACHE_MIN_SIZE;  // Initial size of cache; will resize ondemand
-        efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
+        efs->cache = calloc(efs->cache_size, sizeof(*efs->cache));
     }
     ESP_LOGV(TAG, "Format Success!");
     
@@ -687,7 +687,7 @@ static esp_err_t esp_littlefs_init(const esp_vfs_littlefs_conf_t* conf)
             goto exit;
         }
         efs->cache_size = 4;
-        efs->cache = calloc(sizeof(*efs->cache), efs->cache_size);
+        efs->cache = calloc(efs->cache_size, sizeof(*efs->cache));
     }
 
     err = ESP_OK;

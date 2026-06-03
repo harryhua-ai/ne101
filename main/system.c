@@ -166,7 +166,7 @@ const char *system_get_version()
 void system_reset()
 {
     cfg_user_erase_all();  // Clear all configuration
-    storage_format();      // Format storage
+    storage_clear_jpg_file(); // Clear jpg files
 }
 
 /**

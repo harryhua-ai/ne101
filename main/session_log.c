@@ -176,6 +176,20 @@ void session_log_resume_after_stat(bool paused)
     xSemaphoreGiveRecursive(s_log_mutex);
 }
 
+static void session_log_close_fp_locked(void)
+{
+    if (!s_log_fp) {
+        return;
+    }
+    fflush(s_log_fp);
+    int fd = fileno(s_log_fp);
+    if (fd >= 0) {
+        (void)fsync(fd);
+    }
+    fclose(s_log_fp);
+    s_log_fp = NULL;
+}
+
 void session_log_close_for_sleep(void)
 {
     if (!s_log_mutex) {
@@ -184,14 +198,22 @@ void session_log_close_for_sleep(void)
     if (xSemaphoreTakeRecursive(s_log_mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
         return;
     }
-    if (s_log_fp) {
-        fflush(s_log_fp);
-        int fd = fileno(s_log_fp);
-        if (fd >= 0) {
-            (void)fsync(fd);
-        }
-        fclose(s_log_fp);
-        s_log_fp = NULL;
+    session_log_close_fp_locked();
+    xSemaphoreGiveRecursive(s_log_mutex);
+}
+
+void session_log_detach(void)
+{
+    if (!s_log_mutex) {
+        return;
+    }
+    if (xSemaphoreTakeRecursive(s_log_mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        return;
+    }
+    session_log_close_fp_locked();
+    if (s_prev_vprintf) {
+        (void)esp_log_set_vprintf(s_prev_vprintf);
+        s_prev_vprintf = NULL;
     }
     xSemaphoreGiveRecursive(s_log_mutex);
 }

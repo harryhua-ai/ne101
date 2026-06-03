@@ -22,6 +22,7 @@ typedef enum modeSel {
     MODE_CONFIG,       ///< Configuration mode
     MODE_SCHEDULE,     ///< Scheduled tasks mode
     MODE_UPLOAD,       ///< Upload mode
+    MODE_DPP,          ///< HaLow DPP push-button provisioning
 } modeSel_e;
 
 /**

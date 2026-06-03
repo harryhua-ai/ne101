@@ -1,0 +1,5 @@
+dependencies:
+  morsemicro/firmware:
+    version: ^2.9.7-esp32-3
+  morsemicro/halow:
+    version: ^2.9.7-esp32-3

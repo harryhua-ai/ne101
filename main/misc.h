@@ -83,7 +83,7 @@ void misc_flash_led_close();
 void misc_led_able(uint8_t is_able);
 /* Force indicator LED fully off (stop blink/hold/PWM) */
 void misc_led_off(void);
-/* Blink status LED */
+/* Blink status LED; blink_cnt==0 means blink until next misc_led_blink/off/able */
 void misc_led_blink(uint8_t blink_cnt, uint16_t blink_interval);
 /* Get light sensor reading as percentage */
 uint8_t misc_get_light_value_rate();
