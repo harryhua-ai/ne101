@@ -97,11 +97,7 @@ extern "C" {
 #define KEY_MQTT_KEY_NAME   "mqtt:keyName"
 #define KEY_WIFI_SSID       "wifi:ssid"
 #define KEY_WIFI_PASSWORD   "wifi:password"
-#define KEY_IOT_AUTOP       "iot:autop"
-#define KEY_IOT_DM          "iot:dm"
-#define KEY_IOT_AUTOP_DONE  "iot:autoPdone"
-#define KEY_IOT_DM_DONE     "iot:dmdone"
-#define KEY_IOT_RPS_URL     "iot:rpsUrl"
+#define KEY_WIFI_AP_IP      "wifi:apIp"
 #define KEY_SYS_CRC32       "sys:crc32"
 #define KEY_SYS_SCHE_TIME   "sys:scheTime"
 #define KEY_SYS_TIME_ZONE   "sys:tz"
@@ -140,6 +136,7 @@ typedef struct deviceInfo {
     char countryCode[MAX_LEN_3];
     char netmod[MAX_LEN_8];
     char camera[MAX_LEN_8];
+    char apIp[MAX_LEN_16];
 } deviceInfo_t;
 
 /**
@@ -316,16 +313,6 @@ typedef struct platformParamAttr {
 } platformParamAttr_t;
 
 /**
- * IoT service attributes structure
- */
-typedef struct IoTAttr {
-    uint8_t autop_enable; // used to enable and disable Auto-P (RPS) service
-    uint8_t dm_enable; // used to enable and disable remote management service with developer platform
-    uint8_t autop_done; // used to mark whether Auto-P (RPS) service Profile has been downloaded
-    uint8_t dm_done; // used to mark whether remote management service Profile with developer platform has been downloaded
-} IoTAttr_t;
-
-/**
  * Cellular authentication type enumeration
  */
 typedef enum  {
@@ -418,8 +405,6 @@ esp_err_t cfg_get_mqtt_attr(mqttAttr_t *mqtt);
 esp_err_t cfg_set_mqtt_attr(mqttAttr_t *mqtt);
 esp_err_t cfg_get_wifi_attr(wifiAttr_t *wifi);
 esp_err_t cfg_set_wifi_attr(wifiAttr_t *wifi);
-esp_err_t cfg_get_iot_attr(IoTAttr_t *iot);
-esp_err_t cfg_set_iot_attr(IoTAttr_t *iot);
 esp_err_t cfg_get_platform_param_attr(platformParamAttr_t *platformParam);
 esp_err_t cfg_set_platform_param_attr(platformParamAttr_t *platformParam);
 esp_err_t cfg_get_cellular_param_attr(cellularParamAttr_t *cellularParam);

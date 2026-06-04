@@ -1,0 +1,20 @@
+menu "Morse Micro morselib"
+
+    config MM_MORSELIB_USE_PREBUILT
+        bool "Use prebuilt libmorse.a (skip source build)"
+        default n
+        help
+            When enabled, the build will link against a prebuilt 'libmorse.a' instead of
+            compiling morselib sources and running the library mangler step. This greatly
+            reduces build time and avoids toolchain/environment complexity.
+
+    config MM_MORSELIB_PREBUILT_PATH
+        string "Path to prebuilt libmorse.a"
+        depends on MM_MORSELIB_USE_PREBUILT
+        default "components/halow/morse/morselib/prebuilt/esp32s3/xtensa-esp32s3-elf/libmorse.a"
+        help
+            File path to the prebuilt 'libmorse.a'. Can be an absolute path or a path
+            relative to the project root.
+
+endmenu
+

@@ -13,7 +13,6 @@
 #include "esp_netif.h"
 #include "esp_netif_ppp.h"
 #include "esp_modem_api.h"
-#include "iot_mip.h"
 #include "debug.h"
 
 #define TAG "-->CAT1"  // Logging tag for CAT1 module
@@ -149,9 +148,6 @@ static void on_ip_event(void *arg, esp_event_base_t event_base, int32_t event_id
         snprintf(g_cat1.status.ipv6Gateway, sizeof(g_cat1.status.ipv6Gateway), "%s", "::");
         snprintf(g_cat1.status.ipv6Dns, sizeof(g_cat1.status.ipv6Dns), "%s", "::");
 
-        if (iot_mip_autop_is_enable()) {
-            iot_mip_autop_async_start(NULL);
-        }
         // push_start();
         // if(system_get_mode() != MODE_SCHEDULE){
         //     system_ntp_time(false);
@@ -1216,8 +1212,8 @@ static int cat1_restart_cmd(int argc, char **argv)
     return ESP_OK;
 }
 static esp_console_cmd_t g_cmd[] = {
-    {"atsend", "atsend [at_command]", NULL, cat1_atsend_cmd, NULL},
-    {"cat1restart", "cat1restart", NULL, cat1_restart_cmd, NULL},
+    ESP_CONSOLE_CMD_INIT("atsend", "atsend [at_command]", NULL, cat1_atsend_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("cat1restart", "cat1restart", NULL, cat1_restart_cmd, NULL),
 };
 
 void cat1_cmd_add(void)

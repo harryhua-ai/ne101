@@ -377,9 +377,9 @@ static int do_ls_cmd(int argc, char **argv)
 }
 
 static esp_console_cmd_t g_cmd[] = {
-    {"tf", "show TF card status", NULL, do_tf_cmd, NULL},
-    {"ls", "show file list", NULL, do_ls_cmd, NULL},
-    {"clear", "remove all jpg file", NULL, do_clear_cmd, NULL},
+    ESP_CONSOLE_CMD_INIT("tf", "show TF card status", NULL, do_tf_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("ls", "show file list", NULL, do_ls_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("clear", "remove all jpg file", NULL, do_clear_cmd, NULL),
 };
 
 void storage_upload_start()
@@ -398,6 +398,9 @@ void storage_upload_stop()
 
 void storage_format()
 {
+    /* Close session log before format; otherwise esp_log mirror writes to a stale FILE. */
+    session_log_detach();
+
     xSemaphoreTake(g_mdStorage.mutex, portMAX_DELAY);
     ESP_LOGI(TAG, "storage_format ...");
     if (esp_littlefs_format(STORAGE_PART) != ESP_OK) {

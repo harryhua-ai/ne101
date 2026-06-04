@@ -151,6 +151,17 @@ const App = {
             console.log(res);
         });
     },
+    handleSystemReset() {
+        this.showTipsDialog($t('systemResetTips'), true, this.confirmSystemReset);
+    },
+    confirmSystemReset() {
+        postData(URL.setDevReset).then((res) => {
+            console.log(res);
+        }).catch((err) => {
+            console.error(err);
+            this.alertMessage('error');
+        });
+    },
 
     // import methods from other function modules
     ...Image(),

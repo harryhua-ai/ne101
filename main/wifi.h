@@ -67,6 +67,12 @@ void wifi_put_list(wifiList_t *list);
 bool wifi_sta_is_connected();
 
 /**
+ * Block until STA has IP (or timeout).
+ * @return ESP_OK if connected, ESP_ERR_TIMEOUT otherwise
+ */
+esp_err_t wifi_wait_sta_connected(uint32_t timeout_ms);
+
+/**
  * Get device MAC address
  * @param mac_hex Output buffer for MAC (6 bytes)
  * 

@@ -37,13 +37,13 @@
 #include "mqtt.h"
 #include "push.h"
 #include "cat1.h"
-#include "iot_mip.h"
 #include "net_module.h"
 #include "rtc_pcf8563.h"
 #include "morse.h"
 #include "utils.h"
 #include "storage.h"
 #include "session_log.h"
+#include "morse_dpp_cli.h"
 
 #define TAG "-->MAIN"
 
@@ -214,6 +214,7 @@ static void print_system_info(void)
  */
 static modeSel_e handle_power_on_reset(void)
 {
+    system_set_temporary_mode(MODE_UNDEFINED);
     netModule_check();
     return MODE_SCHEDULE;
 }
@@ -352,9 +353,9 @@ static void common_init(void)
     srand(esp_random());
 
     debug_open();
+    morse_dpp_cli_init();
     cfg_init();
     sleep_open();
-    iot_mip_init();
 }
 
 /**
@@ -394,7 +395,7 @@ static void handle_snapshot_mode(snapType_e snapType, QueueHandle_t xQueueMqtt,
         netModule_open(main_mode);
     }
     
-    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_MIP_DONE_BIT, true);
+    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT, true);
 }
 
 /**
@@ -415,8 +416,10 @@ static void handle_config_mode(snapType_e snapType, QueueHandle_t xQueueMqtt)
     if (snapType == SNAP_BUTTON) {
         camera_snapshot(snapType, 1);
     }
-    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | 
-                          SLEEP_NO_OPERATION_TIMEOUT_BIT | SLEEP_MIP_DONE_BIT | SLEEP_NO_DEBUG_BIT, true);
+    /* No DPP in progress until double-click clears this bit. */
+    sleep_set_event_bits(SLEEP_DPP_DONE_BIT);
+    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_DPP_DONE_BIT |
+                          SLEEP_NO_OPERATION_TIMEOUT_BIT | SLEEP_NO_DEBUG_BIT, true);
 }
 
 /**
@@ -428,7 +431,7 @@ static void handle_schedule_mode(void)
     
     netModule_open(main_mode);
     system_schedule_todo();
-    sleep_wait_event_bits(SLEEP_SCHEDULE_DONE_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_MIP_DONE_BIT, true);
+    sleep_wait_event_bits(SLEEP_SCHEDULE_DONE_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT, true);
 }
 
 /**
@@ -440,9 +443,8 @@ static void handle_upload_mode(void)
     
     netModule_open(main_mode);
     system_upload_todo();
-    sleep_wait_event_bits(SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_MIP_DONE_BIT, true);
+    sleep_wait_event_bits(SLEEP_STORAGE_UPLOAD_STOP_BIT, true);
 }
-
 
 /**
  * @brief Initialize queues and start services for operational modes
@@ -538,8 +540,7 @@ void app_main(void)
         case MODE_UPLOAD:
             handle_upload_mode();
             break;
-            
-            
+
         default:
             ESP_LOGE(TAG, "Unknown mode: %d", main_mode);
             break;

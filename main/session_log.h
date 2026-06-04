@@ -43,6 +43,11 @@ void session_log_resume_after_stat(bool paused);
 void session_log_close_for_sleep(void);
 
 /**
+ * Close log file and restore default esp_log output (call before LittleFS format/unmount).
+ */
+void session_log_detach(void);
+
+/**
  * HTTP GET: send merged logs (oldest boot -> newest) as text/plain attachment (chunked).
  */
 esp_err_t session_log_http_export(httpd_req_t *req);

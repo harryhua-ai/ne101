@@ -637,17 +637,6 @@ static int do_date_cmd(int argc, char **argv)
     return ESP_OK;
 }
 
-static int do_rpsurl_cmd(int argc, char **argv)
-{
-    if (argc < 2) {
-        cfg_erase_key(KEY_IOT_RPS_URL);
-        printf("rps url has been erased\n");
-        return ESP_OK;
-    }
-    cfg_set_str(KEY_IOT_RPS_URL, argv[1]);
-    return ESP_OK;
-}
-
 static int do_reset_cmd(int argc, char **argv)
 {
     system_reset();
@@ -697,25 +686,24 @@ static int do_mode_cmd(int argc, char **argv)
         return ESP_OK;
     }
     
-    system_set_temporary_mode(tmp_mode);
+    system_set_temporary_mode_and_restart(tmp_mode);
     return ESP_OK;
 }
 
 static esp_console_cmd_t g_cmd[] = {
-    {"fset", "factory setting: fset [key] [value]", NULL, do_fset_cmd, NULL},
-    {"fget", "factory getting: fget [key]", NULL, do_fget_cmd, NULL},
-    {"reboot", "system restart", NULL, do_reboot_cmd, NULL},
-    {"sleep", "system sleep", NULL, do_sleep_cmd, NULL},
-    {"version", "system software version", NULL, do_version_cmd, NULL},
-    {"schedule", "set schedule time, default 03:00:00", NULL, do_schetime_cmd, NULL},
-    {"cat1", "cat1 status", NULL, do_cat1_cmd, NULL},
-    {"tz", "set time zone", NULL, do_tz_cmd, NULL},
-    {"date", "show system date", NULL, do_date_cmd, NULL},
-    {"rpsurl", "set rps url", NULL, do_rpsurl_cmd, NULL},
-    {"sys_reset", "system reset", NULL, do_reset_cmd, NULL},
-    {"debug", "debug on/off", NULL, do_debug_cmd, NULL},
-    {"snap", "snapshot", NULL, do_snap_cmd, NULL},
-    {"mode", "set mode", NULL, do_mode_cmd, NULL},
+    ESP_CONSOLE_CMD_INIT("fset", "factory setting: fset [key] [value]", NULL, do_fset_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("fget", "factory getting: fget [key]", NULL, do_fget_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("reboot", "system restart", NULL, do_reboot_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("sleep", "system sleep", NULL, do_sleep_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("version", "system software version", NULL, do_version_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("schedule", "set schedule time, default 03:00:00", NULL, do_schetime_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("cat1", "cat1 status", NULL, do_cat1_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("tz", "set time zone", NULL, do_tz_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("date", "show system date", NULL, do_date_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("sys_reset", "system reset", NULL, do_reset_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("debug", "debug on/off", NULL, do_debug_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("snap", "snapshot", NULL, do_snap_cmd, NULL),
+    ESP_CONSOLE_CMD_INIT("mode", "set mode", NULL, do_mode_cmd, NULL),
 };
 
 /*------------------------------------------------------------------------*/
@@ -781,6 +769,7 @@ esp_err_t cfg_get_device_info(deviceInfo_t *device)
     }
     strncpy(device->camera, camera_get_backend_name(), sizeof(device->camera));
     get_str(g_userHandle, KEY_DEVICE_NETMOD, device->netmod, sizeof(device->netmod), "");
+    get_str(g_userHandle, KEY_WIFI_AP_IP, device->apIp, sizeof(device->apIp), "192.168.1.1");
     mutex_unlock();
     return ESP_OK;
 }
@@ -790,6 +779,7 @@ esp_err_t cfg_set_device_info(deviceInfo_t *device)
     set_str(g_userHandle, KEY_DEVICE_NAME, device->name);
     set_str(g_userHandle, KEY_DEVICE_COUNTRY, device->countryCode);
     set_str(g_userHandle, KEY_DEVICE_NETMOD, device->netmod);
+    set_str(g_userHandle, KEY_WIFI_AP_IP, device->apIp);
     commit_cfg(g_userHandle);
     set_str(g_factoryHandle, KEY_DEVICE_MAC, device->mac);
     set_str(g_factoryHandle, KEY_DEVICE_SN, device->sn);
@@ -1034,38 +1024,6 @@ esp_err_t cfg_set_wifi_attr(wifiAttr_t *wifi)
     mutex_lock();
     set_str(g_userHandle, KEY_WIFI_SSID, wifi->ssid);
     set_str(g_userHandle, KEY_WIFI_PASSWORD, wifi->password);
-    commit_cfg(g_userHandle);
-    mutex_unlock();
-    return ESP_OK;
-}
-
-esp_err_t cfg_get_iot_attr(IoTAttr_t *iot)
-{
-    deviceInfo_t device;
-    cfg_get_device_info(&device);
-
-    mutex_lock();
-    memset(iot, 0, sizeof(IoTAttr_t));
-    if (cfg_is_undefined(device.secretKey)) {
-        get_u8(g_userHandle, KEY_IOT_AUTOP, &iot->autop_enable, 0);
-        get_u8(g_userHandle, KEY_IOT_DM, &iot->dm_enable, 0);
-    } else {
-        get_u8(g_userHandle, KEY_IOT_AUTOP, &iot->autop_enable, 1);
-        get_u8(g_userHandle, KEY_IOT_DM, &iot->dm_enable, 1);
-    }
-    get_u8(g_userHandle, KEY_IOT_AUTOP_DONE, &iot->autop_done, 0);
-    get_u8(g_userHandle, KEY_IOT_DM_DONE, &iot->dm_done, 0);
-    mutex_unlock();
-    return ESP_OK;
-}
-
-esp_err_t cfg_set_iot_attr(IoTAttr_t *iot)
-{
-    mutex_lock();
-    set_u8(g_userHandle, KEY_IOT_AUTOP, iot->autop_enable);
-    set_u8(g_userHandle, KEY_IOT_DM, iot->dm_enable);
-    set_u8(g_userHandle, KEY_IOT_AUTOP_DONE, iot->autop_done);
-    set_u8(g_userHandle, KEY_IOT_DM_DONE, iot->dm_done);
     commit_cfg(g_userHandle);
     mutex_unlock();
     return ESP_OK;

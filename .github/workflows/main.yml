@@ -18,16 +18,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        build_version:
-          - name: "FCC"
-            config_fcc: true
-            config_ce: false
-          - name: "CE"
-            config_fcc: false
-            config_ce: true
     
     steps:
     - name: Checkout repository
@@ -52,63 +42,23 @@ jobs:
       run: |
         set -e
         VERSION="${{ steps.get_version.outputs.version }}"
-        BUILD_NAME="${{ matrix.build_version.name }}"
         
-        echo "::group::Configuring for $BUILD_NAME"
+        echo "::group::Configuring for single firmware"
         echo "Version: $VERSION"
         
-        # Set PROJECT_VER using tag name (format: NE_101_V1.5_FCC_PIR)
-        PROJECT_VER="NE_101_${VERSION}_${BUILD_NAME}"
+        # Set PROJECT_VER using tag name (format: NE_101_V1.5)
+        PROJECT_VER="NE_101_${VERSION}"
         sed -i "s|set(PROJECT_VER \".*\")|set(PROJECT_VER \"${PROJECT_VER}\")|" CMakeLists.txt
         echo "✓ PROJECT_VER: ${PROJECT_VER}"
-        
-        # Configure sdkconfig
-        update_config() {
-          local file=$1
-          local config_name=$2
-          local enable=$3
 
-          [ ! -f "$file" ] && return 0
-
-          # Normalize enable to "true"/"false"
-          if [ "$enable" != "true" ]; then
-            enable="false"
-          fi
-
-          # If a set line exists, convert it to the "not set" form first
-          sed -i "s/^${config_name}=.*/# ${config_name} is not set/" "$file" 2>/dev/null || true
-
-          # Ensure there is at least a commented "not set" line to match against
-          if ! grep -q "^# ${config_name} is not set" "$file" 2>/dev/null; then
-            echo "# ${config_name} is not set" >> "$file"
-          fi
-
-          # Only enable when explicitly requested
-          if [ "$enable" = "true" ]; then
-            sed -i "s/^# ${config_name} is not set/${config_name}=y/" "$file"
-            echo "✓ Enabled ${config_name} in $(basename "$file")"
-          else
-            echo "✓ Left ${config_name} disabled in $(basename "$file")"
-          fi
-        }
-        
-        # Update sdkconfig settings
-        update_config "sdkconfig.defaults" "CONFIG_MM_BCF_MF08251_FCC" "${{ matrix.build_version.config_fcc }}"
-        update_config "sdkconfig.defaults" "CONFIG_MM_BCF_MF08251_CE" "${{ matrix.build_version.config_ce }}"
-        update_config "sdkconfig" "CONFIG_MM_BCF_MF08251_FCC" "${{ matrix.build_version.config_fcc }}"
-        update_config "sdkconfig" "CONFIG_MM_BCF_MF08251_CE" "${{ matrix.build_version.config_ce }}"
-        
         echo "::endgroup::"
 
     - name: Build with ESP-IDF ${{ env.ESP_IDF_VERSION }}
-      env:
-        BUILD_VERSION: ${{ matrix.build_version.name }}
       run: |
         docker run --rm \
           -v ${{ github.workspace }}:/project \
           -w /project \
           -e IDF_TARGET=${{ env.ESP_IDF_TARGET }} \
-          -e BUILD_VERSION=${{ env.BUILD_VERSION }} \
           ${{ env.DOCKER_IMAGE }} \
           bash -c "
             . \$IDF_PATH/export.sh && \
@@ -119,7 +69,7 @@ jobs:
     - name: Verify build artifacts
       if: success()
       run: |
-        echo "::group::Build artifacts for ${{ matrix.build_version.name }}"
+        echo "::group::Build artifacts"
         ls -lh build/*.bin build/*.elf 2>/dev/null || true
         ls -lh build/bootloader/bootloader.bin 2>/dev/null || true
         ls -lh build/partition_table/partition-table.bin 2>/dev/null || true
@@ -131,7 +81,7 @@ jobs:
       run: |
         set -e
         VERSION="${{ steps.get_version.outputs.version }}"
-        ZIP_NAME="NE_101_${VERSION}_${{ matrix.build_version.name }}.zip"
+        ZIP_NAME="NE_101_${VERSION}.zip"
         
         echo "::group::Creating package: $ZIP_NAME"
         mkdir -p release
@@ -166,7 +116,7 @@ jobs:
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.build_version.name }}-build-logs
+        name: build-logs
         path: |
           build/**/*.log
         retention-days: 7
@@ -213,10 +163,7 @@ jobs:
         body: |
           ## NE_101 Firmware Release ${{ steps.get_version.outputs.version }}
           
-          This release includes the following firmware versions:
-          
-          - **NE_101_${{ steps.get_version.outputs.version }}_FCC.zip** - WIFI/CAT1/HALOW 915M version with PIR and ALARMIN support
-          - **NE_101_${{ steps.get_version.outputs.version }}_CE.zip** - WIFI/CAT1/HALOW 868M version with PIR and ALARMIN support
+          This release includes a single firmware package containing multi-BCF support (FCC/CE in one image).
           
           ### Build Information
           - ESP-IDF Version: ${{ env.ESP_IDF_VERSION }}

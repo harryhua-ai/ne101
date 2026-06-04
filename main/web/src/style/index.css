@@ -195,30 +195,26 @@ img.logo {
     margin-bottom: 15px;
 }
 
-/* Device Maintenance */
-.device-card .card-item-content button:nth-child(1) {
-    margin: 8px;
-    width: 80px;
+/* Action buttons (Save / Upgrade / Export / …) align with card-title Refresh (right edge) */
+.card .card-item-content.device-card-actions,
+.card .card-item-content.item-button {
+    width: auto;
+    flex: 1;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
-/* Upgrade / Download / MQTT / Cellular outline actions: same footprint */
-.device-card .card-item-content button.device-card-action-btn,
-.mqtt-card .card-item-content.item-button button.device-card-action-btn,
-.cellular-card .card-item-content button.device-card-action-btn {
-    margin: 8px;
-    width: 100px;
-    max-width: 100px;
-    min-width: 100px;
+.card .card-item-content.device-card-actions button.device-card-action-btn,
+.card .card-item-content.item-button button.device-card-action-btn {
+    margin: 8px 0;
+    width: 82px;
+    max-width: 82px;
+    min-width: 82px;
     height: 32px;
     box-sizing: border-box;
     white-space: nowrap;
     padding-left: 4px;
     padding-right: 4px;
-}
-
-/* Single Download button: align to same right column as Upgrade (after Browse) */
-.device-card .card-item-content.device-card-log-download {
-    justify-content: flex-end;
 }
 
 .normal-select .ms-select {
@@ -232,6 +228,11 @@ img.logo {
 }
 .mqtt-card .card-item .card-item-content  {
     width: 190px;
+}
+.mqtt-card .card-item .card-item-content.item-button,
+.mqtt-card .card-item .card-item-content.device-card-actions {
+    width: auto;
+    flex: 1;
 }
 .mqtt-card .card-item .card-item-content input, 
 .mqtt-card .card-item .card-item-content textarea, 
@@ -258,16 +259,19 @@ img.logo {
 .host-input-group input[type="text"] {
     border-radius: 0 4px 4px 0;
 }
-.mqtt-card .item-button {
-    justify-content: flex-end;
-}
 .mqtt-card .item-button button:not(.device-card-action-btn) {
     width: 82px;
 }
 
 
-/* Sleep mode: full-width outline button */
-.footer #btn-sleep.plain {
+/* Footer: sleep / system reset full-width outline buttons */
+.footer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.footer button.plain {
     width: 100%;
     height: 40px;
     max-width: none;

@@ -53,6 +53,11 @@ void storage_upload_stop();
  */
 void storage_format();
 
+/**
+ * Clear the jpg files in the storage
+ */
+void storage_clear_jpg_file();
+
 #ifdef __cplusplus
 }
 #endif

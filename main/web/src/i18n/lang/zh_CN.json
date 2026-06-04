@@ -101,6 +101,9 @@
     "deviceMainte": "设备维护",
     "deviceName": "设备名称",
     "macAddress": "MAC地址",
+    "apAddress": "AP地址",
+    "apAddressTip": "本机ip地址，修改后下次重启生效",
+    "invalidIpv4": "请输入有效的 IPv4 地址",
     "SN": "SN",
     "battery": "电池",
     "typecPowered": "Type-c供电",
@@ -143,7 +146,9 @@
     "region": "地区"
   },
   "sleepMode": "休眠模式",
-  "sleerModeTips": "设备即将进入休眠模式。",
+  "sleerModeTips": "设备即将进入休眠模式？",
+  "systemReset": "系统重置",
+  "systemResetTips": "重置用户配置并重启？",
   "requiredField": "必填项。",
   "vaildRange1-65535": "有效范围：1~65535",
   "vaildRange1-999": "有效范围：1~999",
@@ -215,7 +220,7 @@
     "pingTest": "Ping 测试",
     "pingHostPlaceholder": "主机或IP",
     "ping": "Ping",
-    "pinging": "Ping 中...",
+    "pinging": "Pinging",
     "pingError": "Ping 失败",
     "back": "返回"
   }
