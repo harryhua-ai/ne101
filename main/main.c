@@ -37,7 +37,6 @@
 #include "mqtt.h"
 #include "push.h"
 #include "cat1.h"
-#include "iot_mip.h"
 #include "net_module.h"
 #include "morse.h"
 #include "utils.h"
@@ -215,6 +214,7 @@ static void print_system_info(void)
 static modeSel_e handle_power_on_reset(void)
 {
     comp_init();
+    system_set_temporary_mode(MODE_UNDEFINED);
     netModule_check();
     return MODE_SCHEDULE;
 }
@@ -356,7 +356,6 @@ static void common_init(void)
     morse_dpp_cli_init();
     cfg_init();
     sleep_open();
-    iot_mip_init();
 }
 
 /**
@@ -396,7 +395,7 @@ static void handle_snapshot_mode(snapType_e snapType, QueueHandle_t xQueueMqtt,
         netModule_open(main_mode);
     }
     
-    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_MIP_DONE_BIT, true);
+    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT, true);
 }
 
 /**
@@ -417,8 +416,10 @@ static void handle_config_mode(snapType_e snapType, QueueHandle_t xQueueMqtt)
     if (snapType == SNAP_BUTTON) {
         camera_snapshot(snapType, 1);
     }
-    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | 
-                          SLEEP_NO_OPERATION_TIMEOUT_BIT | SLEEP_MIP_DONE_BIT | SLEEP_NO_DEBUG_BIT, true);
+    /* No DPP in progress until double-click clears this bit. */
+    sleep_set_event_bits(SLEEP_DPP_DONE_BIT);
+    sleep_wait_event_bits(SLEEP_SNAPSHOT_STOP_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_DPP_DONE_BIT |
+                          SLEEP_NO_OPERATION_TIMEOUT_BIT | SLEEP_NO_DEBUG_BIT, true);
 }
 
 /**
@@ -430,7 +431,7 @@ static void handle_schedule_mode(void)
     
     netModule_open(main_mode);
     system_schedule_todo();
-    sleep_wait_event_bits(SLEEP_SCHEDULE_DONE_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_MIP_DONE_BIT, true);
+    sleep_wait_event_bits(SLEEP_SCHEDULE_DONE_BIT | SLEEP_STORAGE_UPLOAD_STOP_BIT, true);
 }
 
 /**
@@ -442,31 +443,8 @@ static void handle_upload_mode(void)
     
     netModule_open(main_mode);
     system_upload_todo();
-    sleep_wait_event_bits(SLEEP_STORAGE_UPLOAD_STOP_BIT | SLEEP_MIP_DONE_BIT, true);
+    sleep_wait_event_bits(SLEEP_STORAGE_UPLOAD_STOP_BIT, true);
 }
-
-/**
- * @brief HaLow DPP push-button provisioning (entered via button double-click).
- */
-static void handle_dpp_mode(void)
-{
-    ESP_LOGI(TAG, "dpp mode");
-
-    misc_led_blink(0, 500);
-    netModule_open(main_mode);
-
-    esp_err_t rc = morse_dpp_pb_run(MORSE_DPP_PB_DEFAULT_TIMEOUT_MS);
-    if (rc == ESP_OK) {
-        misc_led_blink(3, 300);
-    } else {
-        ESP_LOGW(TAG, "DPP PB failed: %s", esp_err_to_name(rc));
-        misc_led_blink(5, 150);
-    }
-
-    sleep_set_event_bits(SLEEP_NO_OPERATION_TIMEOUT_BIT);
-    sleep_wait_event_bits(SLEEP_NO_OPERATION_TIMEOUT_BIT, false);
-}
-
 
 /**
  * @brief Initialize queues and start services for operational modes
@@ -559,10 +537,6 @@ void app_main(void)
             
         case MODE_UPLOAD:
             handle_upload_mode();
-            break;
-
-        case MODE_DPP:
-            handle_dpp_mode();
             break;
 
         default:

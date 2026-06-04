@@ -11,7 +11,6 @@
 #include "misc.h"
 #include "lwip/sockets.h"
 #include "lwip/netdb.h"
-#include "iot_mip.h"
 #include "net_module.h"
 
 #define TAG "-->WIFI"  // Logging tag for WiFi module
@@ -72,9 +71,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         xEventGroupClearBits(wifi->eventGroup, WIFI_STA_CONNECT_BIT | WIFI_STA_LINK_UP_BIT);
         xEventGroupSetBits(wifi->eventGroup, WIFI_STA_DISCONNECT_BIT);
         wifi->isConnected = false;
-        if (iot_mip_autop_is_enable()) {
-            iot_mip_autop_stop();
-        }
         push_stop();
     }
     if (event_id == WIFI_EVENT_STA_CONNECTED) {
@@ -104,9 +100,6 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
         wifi->isConnected = true;
         xEventGroupClearBits(wifi->eventGroup, WIFI_STA_DISCONNECT_BIT);
         xEventGroupSetBits(wifi->eventGroup, WIFI_STA_CONNECT_BIT);
-        if (iot_mip_autop_is_enable()) {
-            iot_mip_autop_async_start(NULL);
-        }
         if(system_get_mode() != MODE_SCHEDULE){
             system_ntp_time(false);
         }

@@ -5,6 +5,7 @@
  * based on the push:mode configuration.
  */
 #include <string.h>
+#include "cJSON.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,7 +17,6 @@
 #include "webhook.h"
 #include "push.h"
 #include "storage.h"
-#include "iot_mip.h"
 #include "camera.h"
 
 #define TAG "-->PUSH"

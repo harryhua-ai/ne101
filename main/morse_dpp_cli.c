@@ -46,8 +46,8 @@ static void dpp_event_cb(const struct mmwlan_dpp_cb_args *evt, void *arg)
     s_dpp_ctx.pass[0] = '\0';
 
     if (evt->args.pb_result.result == MMWLAN_DPP_PB_RESULT_SUCCESS &&
-        evt->args.pb_result.ssid != NULL &&
         evt->args.pb_result.passphrase != NULL &&
+        evt->args.pb_result.ssid != NULL &&
         evt->args.pb_result.ssid_len > 0 &&
         evt->args.pb_result.ssid_len < MMWLAN_SSID_MAXLEN)
     {
@@ -120,6 +120,18 @@ esp_err_t morse_dpp_pb_run(uint32_t timeout_ms)
 
     ESP_LOGI(TAG, "DPP PB started, waiting up to %lu ms", (unsigned long) timeout_ms);
     BaseType_t ok = xSemaphoreTake(s_dpp_sem, pdMS_TO_TICKS(timeout_ms));
+
+    /*
+     * SDK reports PB success when the config object is received, before the
+     * Configuration Result frame is sent. Stop DPP only after that exchange
+     * completes so the AP can exit push-button mode cleanly.
+     */
+    if (ok && s_dpp_ctx.result == MMWLAN_DPP_PB_RESULT_SUCCESS)
+    {
+        ESP_LOGI(TAG, "waiting %lu ms for DPP conf result TX",
+                 (unsigned long) MORSE_DPP_PB_CONF_RESULT_DELAY_MS);
+        vTaskDelay(pdMS_TO_TICKS(MORSE_DPP_PB_CONF_RESULT_DELAY_MS));
+    }
 
     (void) mmwlan_dpp_stop();
     /* Let UMAC/DPP tear down before STA reconnect (reduces pageset -32768 storms). */

@@ -35,6 +35,7 @@
 #include "http.h"
 #include "wifi.h"
 #include "net_module.h"
+#include "system.h"
 #include "morse_dpp_cli.h"
 #include "push.h"
 
@@ -154,6 +155,7 @@ static void dpp_pb_task(void *arg)
 {
     uint32_t timeout_ms = (uint32_t)(uintptr_t) arg;
 
+    sleep_clear_event_bits(SLEEP_DPP_DONE_BIT);
     push_stop();
     esp_err_t rc = morse_dpp_pb_run(timeout_ms);
 
@@ -165,6 +167,7 @@ static void dpp_pb_task(void *arg)
     if (system_get_mode() == MODE_CONFIG) {
         misc_led_able(1);
     }
+    sleep_set_event_bits(SLEEP_DPP_DONE_BIT);
     vTaskDelete(NULL);
 }
 
@@ -189,9 +192,6 @@ static void button_double_click_cb(void *arg, void *priv)
         }
         return;
     }
-
-    /* From schedule/upload/snapshot: reboot into dedicated DPP mode. */
-    system_set_temporary_mode(MODE_DPP);
 }
 
 static void button_long_press_start_cb(void *arg, void *priv)

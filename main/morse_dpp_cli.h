@@ -12,6 +12,12 @@ extern "C" {
 /** Default DPP push-button wait time (ms). */
 #define MORSE_DPP_PB_DEFAULT_TIMEOUT_MS  (200000U)
 
+/**
+ * Delay before mmwlan_dpp_stop() after PB success so the enrollee can send
+ * DPP Configuration Result to the configurator (hostapd waits ~2 s).
+ */
+#define MORSE_DPP_PB_CONF_RESULT_DELAY_MS  (3500U)
+
 void morse_dpp_cli_init(void);
 
 /**

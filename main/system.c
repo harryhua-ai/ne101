@@ -10,14 +10,13 @@
 #include "storage.h"
 #include "http_client.h"
 #include "wifi.h"
-#include "iot_mip.h"
 #include "net_module.h"
 
 #define TAG "-->SYSTEM"  // Logging tag for system module
 
 static int time_delta = 0;    //When synchronizing time, the error time between the system and the actual time, in seconds.
 static char ntp_sync_flag = 0;  //The flag indicating whether ntp is synchronized.
-static RTC_DATA_ATTR modeSel_e g_tmpMode = MODE_UNDEFINED;
+static RTC_NOINIT_ATTR modeSel_e g_tmpMode = MODE_UNDEFINED;
 /**
  * Get the current system mode
  * @return modeSel_e
@@ -219,20 +218,7 @@ void system_schedule_todo()
     cfg_get_platform_param_attr(&platformParam);
     
     if (wifi_sta_is_connected() || netModule_is_cat1()) {
-        if (iot_mip_dm_is_enable()) {
-            // Device management operations for MIP platform
-            ESP_LOGI(TAG, "Pending DM ...");
-            iot_mip_dm_pending(30000);
-            iot_mip_dm_request_timestamp();
-            iot_mip_dm_response_wake_up();
-            iot_mip_dm_request_api_token();
-            
-            // Fallback to NTP if cloud platform not connected
-            if (!mqtt_mip_is_connected()) {
-                system_ntp_time(true);
-            }
-            ESP_LOGI(TAG, "Pending DM Done");
-        } else if (platformParam.currentPlatformType == PLATFORM_TYPE_SENSING) {
+        if (platformParam.currentPlatformType == PLATFORM_TYPE_SENSING) {
             // Operations for Sensing platform
             // 1. Time synchronization
             if (http_client_sync_server_time() == ESP_FAIL) {
@@ -316,9 +302,13 @@ bool system_is_ntp_sync_enable()
 void system_set_temporary_mode(modeSel_e mode)
 {
     g_tmpMode = mode;
-    system_restart();
 }
 
+void system_set_temporary_mode_and_restart(modeSel_e mode)
+{
+    system_set_temporary_mode(mode);
+    system_restart();
+}
 /**
  * Get temporary mode
  * @return Temporary mode

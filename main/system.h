@@ -22,7 +22,6 @@ typedef enum modeSel {
     MODE_CONFIG,       ///< Configuration mode
     MODE_SCHEDULE,     ///< Scheduled tasks mode
     MODE_UPLOAD,       ///< Upload mode
-    MODE_DPP,          ///< HaLow DPP push-button provisioning
 } modeSel_e;
 
 /**
@@ -211,6 +210,11 @@ void system_set_temporary_mode(modeSel_e mode);
 
 modeSel_e system_get_temporary_mode(void);
 
+/**
+ * Set temporary mode and restart
+ * @param mode Mode to set
+ */
+void system_set_temporary_mode_and_restart(modeSel_e mode);
 #ifdef __cplusplus
 }
 #endif
