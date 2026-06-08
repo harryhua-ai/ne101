@@ -13,9 +13,15 @@
 
 #define TAG "-->SYSTEM"  // Logging tag for system module
 
+#define NTP_SYNC_INTERVAL_SEC   (60 * 60 * 24)
+#define NTP_SYNC_RETRY_COUNT    5
+#define NTP_SYNC_RETRY_MS       2000
+#define NTP_VALID_EPOCH_MIN     1577836800  /* 2020-01-01 00:00:00 UTC */
+
 static int time_delta = 0;    //When synchronizing time, the error time between the system and the actual time, in seconds.
 static char ntp_sync_flag = 0;  //The flag indicating whether ntp is synchronized.
 static RTC_NOINIT_ATTR modeSel_e g_tmpMode = MODE_UNDEFINED;
+static RTC_DATA_ATTR time_t g_lastNtpSyncTime = 0;
 /**
  * Get the current system mode
  * @return modeSel_e
@@ -32,42 +38,50 @@ modeSel_e system_get_mode(void)
  */
 esp_err_t system_ntp_time(bool force_sync)
 {
-    if(!force_sync && !system_is_ntp_sync_enable()){
+    if (!force_sync && !system_is_ntp_sync_enable()) {
         ESP_LOGI(TAG, "NTP synchronization is disabled, skip synchronization");
         return ESP_OK;
     }
 
-    int retry = 0;
-    const int retry_count = 5;  // Maximum retry attempts
-    time_t sys_now;
+    if (!force_sync) {
+        time_t now = time(NULL);
+        if (g_lastNtpSyncTime != 0 && now >= NTP_VALID_EPOCH_MIN &&
+            (now - g_lastNtpSyncTime) < NTP_SYNC_INTERVAL_SEC) {
+            ESP_LOGI(TAG, "NTP synchronization is already done today, skip synchronization");
+            return ESP_OK;
+        }
+    }
 
     ESP_LOGI(TAG, "Initializing SNTP");
     esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG_MULTIPLE(3,
                                ESP_SNTP_SERVER_LIST("pool.ntp.org", "ntp.aliyun.com", "time.windows.com"));
-    esp_netif_sntp_init(&config);
-    
-    time(&sys_now);
-    // Wait for time synchronization with retries
-    while (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(2000)) != ESP_OK && ++retry < retry_count) {
-        ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, retry_count);
+    esp_err_t err = esp_netif_sntp_init(&config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init SNTP: %s", esp_err_to_name(err));
+        return ESP_FAIL;
     }
 
-    // Print current system time
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-    localtime_r(&now, &timeinfo);
-    ESP_LOGI(TAG, "The current time is: %s", asctime(&timeinfo));
+    int retry = 0;
+    while (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(NTP_SYNC_RETRY_MS)) != ESP_OK &&
+           ++retry < NTP_SYNC_RETRY_COUNT) {
+        ESP_LOGI(TAG, "Waiting for system time to be set... (%d/%d)", retry, NTP_SYNC_RETRY_COUNT);
+    }
 
     esp_netif_sntp_deinit();
-    if (retry == retry_count) {
+
+    if (retry >= NTP_SYNC_RETRY_COUNT) {
         ESP_LOGE(TAG, "Failed to obtain time");
         return ESP_FAIL;
     }
-    
-    // Note: Don't sync to RTC immediately - camera may be using I2C bus
-    // RTC will be synced before deep sleep when I2C bus is free
-    
+
+    time_t now = time(NULL);
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);
+    ESP_LOGI(TAG, "The current time is: %s", asctime(&timeinfo));
+
+    /* Note: Don't sync to RTC immediately - camera may be using I2C bus.
+     * RTC will be synced before deep sleep when I2C bus is free. */
+    g_lastNtpSyncTime = now;
     ntp_sync_flag = 1;
     return ESP_OK;
 }
