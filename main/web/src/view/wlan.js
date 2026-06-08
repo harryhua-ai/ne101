@@ -18,7 +18,9 @@ function Wlan() {
         changeRegionLoading: false,
         // Keep web-supported country codes (do not expose full regdb list).
         regionOptionsAll: [
-            { value: "AU", label: "AU" },
+            { value: "AU-2020", label: "AU-2020" },
+            { value: "AU-2024", label: "AU-2024" },
+            { value: "AU-revmf", label: "AU-revmf" },
             { value: "EU", label: "EU" },
             { value: "IN", label: "IN" },
             { value: "KR", label: "KR" },

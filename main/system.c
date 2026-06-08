@@ -8,7 +8,6 @@
 #include "config.h"
 #include "system.h"
 #include "storage.h"
-#include "http_client.h"
 #include "wifi.h"
 #include "net_module.h"
 
@@ -215,24 +214,10 @@ void system_show_meminfo()
  */
 void system_schedule_todo()
 {
-    platformParamAttr_t platformParam;
-    cfg_get_platform_param_attr(&platformParam);
-    
     if (wifi_sta_is_connected() || netModule_is_cat1()) {
-        if (platformParam.currentPlatformType == PLATFORM_TYPE_SENSING) {
-            // Operations for Sensing platform
-            // 1. Time synchronization
-            if (http_client_sync_server_time() == ESP_FAIL) {
-                system_ntp_time(true);  // Fallback to NTP
-            }
-            // 2. Firmware/config updates
-            http_client_check_update();
-        } else if (platformParam.currentPlatformType == PLATFORM_TYPE_MQTT) {
-            // Operations for MQTT platform
-            ESP_LOGI(TAG, "NTP Synchronizing");
-            if (system_ntp_time(true) == ESP_FAIL) {
-                ESP_LOGI(TAG, "NTP Failed");
-            }
+        ESP_LOGI(TAG, "NTP Synchronizing");
+        if (system_ntp_time(true) == ESP_FAIL) {
+            ESP_LOGI(TAG, "NTP Failed");
         }
     }
     sleep_set_last_schedule_time(time(NULL));

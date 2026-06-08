@@ -562,6 +562,9 @@ void misc_flash_led_close()
     g_misc.led.mode = LED_MODE_LIGHT;
     misc_pwm_ctrl(0, 0);
     g_misc.led.light_update = 1;
+    if (g_misc.led.hold_on) {
+        g_misc.led.light_state = 1;
+    }
     xSemaphoreGive(g_misc.led.mutex);
 }
 
@@ -737,6 +740,12 @@ static void misc_task()
         if (g_misc.led.timer_state == 1 && g_misc.led.blink_cnt == 0) {
             esp_timer_stop(g_misc.led.timer);
             g_misc.led.timer_state = 0;
+            /* CONFIG mode uses hold_on for a steady indicator; blink clears it. */
+            if (system_get_mode() == MODE_CONFIG) {
+                g_misc.led.hold_on = 1;
+                g_misc.led.light_state = 1;
+                g_misc.led.light_update = 1;
+            }
         }
 
         if(g_misc.led.mode == LED_MODE_LIGHT){

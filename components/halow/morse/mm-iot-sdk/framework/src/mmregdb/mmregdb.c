@@ -34,6 +34,8 @@
 
 #include "mmregdb.h"
 
+#include <string.h>
+
 /** List of valid S1G channels for Australia. */
 const struct mmwlan_s1g_channel s1g_channels_AU[] = {
     /* Ctr Freq (Hz), Duty Cycle (%/100), Omit Control Response, Global Op Class, S1G Op Class, S1G Chan #, Op BW, Max Tx EIRP (dBm), Min Packet Spacing Window (microsec), airtime_min (microsec), airtime_max (microsec) */
@@ -88,37 +90,26 @@ const struct mmwlan_s1g_channel s1g_channels_AU[] = {
     {  921500000, 10000, false, 49, 40, 55,  8,  30, 0, 0, 0 },
 };
 
-/** Channel list structure for Australia IEEE 802.11-2020. */
+/** Channel list structure for Australia IEEE 802.11-2020 (domain: AU-2020). */
 const struct mmwlan_s1g_channel_list s1g_channel_list_au_80211_2020 = {
     .country_code = "AU",
     .num_channels = 23,
     .channels = &s1g_channels_AU[0],
 };
 
-/** Channel list structure for Australia IEEE 802.11-2024. */
+/** Channel list structure for Australia IEEE 802.11-2024 (domain: AU-2024). */
 const struct mmwlan_s1g_channel_list s1g_channel_list_au_80211_2024 = {
     .country_code = "AU",
     .num_channels = 23,
     .channels = &s1g_channels_AU[23],
 };
 
-/** Channel list structure for Australia IEEE 802.11-REVMF. */
+/** Channel list structure for Australia IEEE 802.11-REVMF (domain: AU-revmf). */
 const struct mmwlan_s1g_channel_list s1g_channel_list_au_80211_revmf = {
     .country_code = "AU",
     .num_channels = 26,
     .channels = &s1g_channels_AU[23],
 };
-
-/** all channels */
-const struct mmwlan_s1g_channel_list s1g_channel_list_au_all = {
-    .country_code = "AU",
-    .num_channels = 26,
-    .channels = &s1g_channels_AU[0],
-};
-
-#ifndef MM_REGDB_DEFAULT_S1G_CHANNEL_LIST_AU
-   #define MM_REGDB_DEFAULT_S1G_CHANNEL_LIST_AU s1g_channel_list_au_all
-#endif
 
 /** List of valid S1G channels for Canada. */
 const struct mmwlan_s1g_channel s1g_channels_CA[] = {
@@ -409,7 +400,9 @@ const struct mmwlan_s1g_channel_list s1g_channel_list_SG = {
 /** Array of all channel list structs used for the regulatory database. */
 
 const struct mmwlan_s1g_channel_list *regulatory_db_domains[] = {
-    &MM_REGDB_DEFAULT_S1G_CHANNEL_LIST_AU,
+    &s1g_channel_list_au_80211_2020,
+    &s1g_channel_list_au_80211_2024,
+    &s1g_channel_list_au_80211_revmf,
     &s1g_channel_list_CA,
     &s1g_channel_list_EU,
     &s1g_channel_list_GB,
@@ -426,6 +419,47 @@ const struct mmwlan_regulatory_db regulatory_db = {
     .num_domains = (sizeof(regulatory_db_domains)/sizeof(regulatory_db_domains[0])),
     .domains = regulatory_db_domains,
 };
+
+struct mmregdb_domain_entry
+{
+    const char *domain_code;
+    const struct mmwlan_s1g_channel_list *channel_list;
+};
+
+static const struct mmregdb_domain_entry mmregdb_domain_entries[] = {
+    { "AU-2020",  &s1g_channel_list_au_80211_2020 },
+    { "AU-2024",  &s1g_channel_list_au_80211_2024 },
+    { "AU-revmf", &s1g_channel_list_au_80211_revmf },
+    { "CA",       &s1g_channel_list_CA },
+    { "EU",       &s1g_channel_list_EU },
+    { "GB",       &s1g_channel_list_GB },
+    { "IN",       &s1g_channel_list_IN },
+    { "JP",       &s1g_channel_list_JP },
+    { "KR",       &s1g_channel_list_KR },
+    { "NZ",       &s1g_channel_list_NZ },
+    { "US",       &s1g_channel_list_US },
+    { "SG",       &s1g_channel_list_SG },
+};
+
+const struct mmwlan_s1g_channel_list *mmregdb_lookup_domain(const char *domain_code)
+{
+    unsigned ii;
+
+    if (domain_code == NULL)
+    {
+        return NULL;
+    }
+
+    for (ii = 0; ii < (sizeof(mmregdb_domain_entries) / sizeof(mmregdb_domain_entries[0])); ii++)
+    {
+        if (strcmp(domain_code, mmregdb_domain_entries[ii].domain_code) == 0)
+        {
+            return mmregdb_domain_entries[ii].channel_list;
+        }
+    }
+
+    return NULL;
+}
 
 /**
  * Get a pointer to regulatory_db.

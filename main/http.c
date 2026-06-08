@@ -752,11 +752,9 @@ esp_err_t set_dev_info_handle(httpd_req_t *req)
 
 esp_err_t get_mqtt_param_handle(httpd_req_t *req)
 {
-    ESP_LOGI(TAG, "%s", req->uri);
     mqttAttr_t mqtt;
     deviceInfo_t device;
     char *str = NULL;
-    clear_timeout();
 
     httpd_resp_set_type(req, "application/json");
 
@@ -772,11 +770,14 @@ esp_err_t get_mqtt_param_handle(httpd_req_t *req)
     s2j_json_set_basic_element(json_obj, &mqtt, string, user);
     s2j_json_set_basic_element(json_obj, &mqtt, string, password);
     s2j_json_set_basic_element(json_obj, &mqtt, string, topic);
+    s2j_json_set_basic_element(json_obj, &mqtt, string, clientId);
     s2j_json_set_basic_element(json_obj, &mqtt, int, port);
+    s2j_json_set_basic_element(json_obj, &mqtt, int, qos);
     s2j_json_set_basic_element(json_obj, &mqtt, int, tlsEnable);
     s2j_json_set_basic_element(json_obj, &mqtt, string, caName);
     s2j_json_set_basic_element(json_obj, &mqtt, string, certName);
     s2j_json_set_basic_element(json_obj, &mqtt, string, keyName);
+    cJSON_AddNumberToObject(json_obj, "isConnected", mqtt_is_connected() ? 1 : 0);
     str = cJSON_PrintUnformatted(json_obj);
     httpd_resp_sendstr(req, str);
     cJSON_free(str);
@@ -799,7 +800,9 @@ esp_err_t set_mqtt_param_handle(httpd_req_t *req)
         s2j_struct_get_basic_element(mqtt, json, string, user);
         s2j_struct_get_basic_element(mqtt, json, string, password);
         s2j_struct_get_basic_element(mqtt, json, string, topic);
+        s2j_struct_get_basic_element(mqtt, json, string, clientId);
         s2j_struct_get_basic_element(mqtt, json, int, port);
+        s2j_struct_get_basic_element(mqtt, json, int, qos);
         s2j_struct_get_basic_element(mqtt, json, int, tlsEnable);
         s2j_struct_get_basic_element(mqtt, json, string, caName);
         s2j_struct_get_basic_element(mqtt, json, string, certName);
@@ -807,105 +810,6 @@ esp_err_t set_mqtt_param_handle(httpd_req_t *req)
         http_send_json_response(req, RES_OK);
         cfg_set_mqtt_attr(mqtt);
         s2j_delete_struct_obj(mqtt);
-        s2j_delete_json_obj(json);
-        http_free_content(content);
-        if (wifi_sta_is_connected() || netModule_is_cat1()) {
-            push_restart();
-        }
-        return ESP_OK;
-    }
-    return ESP_FAIL;
-}
-
-esp_err_t get_platform_param_handle(httpd_req_t *req)
-{
-    // ESP_LOGI(TAG, "%s", req->uri);
-
-    // clear_timeout(); //deleted!  web can connect to the server every 2 seconds
-
-    httpd_resp_set_type(req, "application/json");
-
-    platformParamAttr_t param;
-    cfg_get_platform_param_attr(&param);
-
-    param.mqttPlatform.isConnected = mqtt_is_connected() ? 1 : 0;
-    //
-    s2j_create_json_obj(json_obj);
-    s2j_json_set_basic_element(json_obj, &param, int, currentPlatformType);
-
-    s2j_json_set_struct_element(json_sensing, json_obj, sensingParam, &param, sensingPlatformAttr_t, sensingPlatform);
-    s2j_json_set_basic_element(json_sensing, sensingParam, int, platformType);
-    s2j_json_set_basic_element(json_sensing, sensingParam, string, platformName);
-    s2j_json_set_basic_element(json_sensing, sensingParam, string, host);
-    s2j_json_set_basic_element(json_sensing, sensingParam, int, mqttPort);
-    s2j_json_set_basic_element(json_sensing, sensingParam, int, httpPort);
-
-    s2j_json_set_struct_element(json_mqtt, json_obj, mqttParam, &param, mqttPlatformAttr_t, mqttPlatform);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, int, platformType);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, platformName);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, host);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, int, mqttPort);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, topic);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, clientId);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, int, qos);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, username);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, password);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, int, isConnected);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, int, tlsEnable);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, caName);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, certName);
-    s2j_json_set_basic_element(json_mqtt, mqttParam, string, keyName);
-
-    char *str = cJSON_PrintUnformatted(json_obj);
-    httpd_resp_sendstr(req, str);
-    cJSON_free(str);
-    s2j_delete_json_obj(json_obj);
-    return ESP_OK;
-}
-
-esp_err_t set_platform_param_handle(httpd_req_t *req)
-{
-    ESP_LOGI(TAG, "%s", req->uri);
-    clear_timeout();
-
-    char *content = http_get_content_from_req(req);
-    if (content) {
-        cJSON *json = cJSON_Parse(content);
-
-        s2j_create_struct_obj(param, platformParamAttr_t);
-        cfg_get_platform_param_attr(param);
-        s2j_struct_get_basic_element(param, json, int, currentPlatformType);
-
-        switch (param->currentPlatformType) {
-            case PLATFORM_TYPE_SENSING: {
-                s2j_struct_get_struct_element(sensingParam, param, json_sensing, json, sensingPlatformAttr_t, sensingPlatform);
-                s2j_struct_get_basic_element(sensingParam, json_sensing, string, host);
-                s2j_struct_get_basic_element(sensingParam, json_sensing, int, mqttPort);
-                s2j_struct_get_basic_element(sensingParam, json_sensing, int, httpPort);
-                break;
-            }
-            case PLATFORM_TYPE_MQTT: {
-                s2j_struct_get_struct_element(mqttParam, param, json_mqtt, json, mqttPlatformAttr_t, mqttPlatform);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, host);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, int, mqttPort);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, topic);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, clientId);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, int, qos);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, username);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, password);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, int, tlsEnable);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, caName);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, certName);
-                s2j_struct_get_basic_element(mqttParam, json_mqtt, string, keyName);
-                break;
-            }
-            default:
-                break;
-        }
-
-        http_send_json_response(req, RES_OK);
-        cfg_set_platform_param_attr(param);
-        s2j_delete_struct_obj(param);
         s2j_delete_json_obj(json);
         http_free_content(content);
         if (wifi_sta_is_connected() || netModule_is_cat1()) {
@@ -1841,16 +1745,6 @@ static const httpd_uri_t g_webHandlers[] = {
         .uri = "/api/v1/network/setMqttParam",
         .method = HTTP_POST,
         .handler = set_mqtt_param_handle,
-    },
-    {
-        .uri = "/api/v1/network/getPlatformParam",
-        .method = HTTP_GET,
-        .handler = get_platform_param_handle,
-    },
-    {
-        .uri = "/api/v1/network/setPlatformParam",
-        .method = HTTP_POST,
-        .handler = set_platform_param_handle,
     },
     {
         .uri = "/api/v1/network/getCellularParam",

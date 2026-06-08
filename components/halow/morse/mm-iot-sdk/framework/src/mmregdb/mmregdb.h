@@ -28,4 +28,16 @@
  */
 const struct mmwlan_regulatory_db *get_regulatory_db(void);
 
+/**
+ * Look up a regulatory domain by its full domain code.
+ *
+ * Standard ISO domains use two-letter codes (e.g. "US", "EU"). Australia exposes
+ * three channelisation variants: "AU-2020", "AU-2024", and "AU-revmf".
+ *
+ * @param domain_code  Domain code to look up.
+ *
+ * @returns the matching channel list if found, else NULL.
+ */
+const struct mmwlan_s1g_channel_list *mmregdb_lookup_domain(const char *domain_code);
+
 /** \@} */
