@@ -63,7 +63,8 @@ void mm_netif_destroy_wifi_sta(esp_netif_t *esp_netif);
  *
  * @param[in] esp_netif netif object
  * @param[in] mac_addr mac address
- * @param[in] country_code country code (default: "US") see mmwlan_regdb.def
+ * @param[in] country_code regulatory domain code (default: "US"). Australia uses
+ *                         AU-2020, AU-2024, or AU-revmf.
  *
  * @return ESP_OK on success, ESP_FAIL on error
  */
@@ -135,7 +136,8 @@ esp_err_t mm_wifi_set_mac(uint8_t *mac);
 /**
  * @brief Set WiFi country code
  *
- * @param[in] country_code country code (default: "US") see mmwlan_regdb.def
+ * @param[in] country_code regulatory domain code (default: "US"). Australia uses
+ *                         AU-2020, AU-2024, or AU-revmf.
  *
  * @return ESP_OK on success, ESP_FAIL on error
  */
@@ -144,7 +146,7 @@ esp_err_t mm_wifi_set_country_code(const char *country_code);
 /**
  * @brief Get WiFi country code
  *
- * @param[out] country_code country code (default: "US") see mmwlan_regdb.def
+ * @param[out] country_code regulatory domain code (default: "US")
  *
  * @return ESP_OK on success, ESP_FAIL on error
  */

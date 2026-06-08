@@ -5,6 +5,7 @@
 #include <time.h>
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "esp_netif.h"
 #include "esp_tls_crypto.h"
 #include "esp_crt_bundle.h"
@@ -18,6 +19,7 @@
 #include "debug.h"
 #include "utils.h"
 #include "push.h"
+#include "onboarding.h"
 
 #define MQTT_CONNECT_BIT BIT(2)
 #define MQTT_DISCONNECT_BIT BIT(3)
@@ -38,6 +40,13 @@ typedef struct mdMqtt {
 } mdMqtt_t;
 
 static mdMqtt_t g_MQ = {0};
+static esp_timer_handle_t s_restart_timer;
+
+static void mqtt_restart_timer_cb(void *arg)
+{
+    (void)arg;
+    mqtt_restart();
+}
 
 static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event, void *handler_args)
 {
@@ -51,6 +60,20 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event, void *hand
             xEventGroupSetBits(mqtt->eventGroup, MQTT_CONNECT_BIT);
             storage_upload_start();
             push_ready();
+
+            /* Always subscribe to the default onboarding topic for cloud config updates */
+            {
+                char topic[ONBOARDING_TOPIC_MAX_LEN] = {0};
+                if (onboarding_get_default_topic(topic, sizeof(topic)) == ESP_OK) {
+                    ESP_LOGI(TAG, "Subscribing to default topic: %s", topic);
+                    int msg_id = esp_mqtt_client_subscribe(mqtt->client, topic, 0);
+                    if (msg_id < 0) {
+                        ESP_LOGE(TAG, "Failed to subscribe to default topic");
+                    } else {
+                        ESP_LOGI(TAG, "Default topic subscription msg_id=%d", msg_id);
+                    }
+                }
+            }
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -65,6 +88,21 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event, void *hand
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+            break;
+        case MQTT_EVENT_DATA:
+            ESP_LOGI(TAG, "MQTT_EVENT_DATA, topic=%.*s", event->topic_len, event->topic);
+            if (onboarding_is_default_topic(event->topic, event->topic_len)) {
+                ESP_LOGI(TAG, "Received config from default topic (%d bytes)", event->data_len);
+                bool mqtt_changed = false;
+                if (onboarding_handle_config(event->data, event->data_len, &mqtt_changed) == ESP_OK) {
+                    if (mqtt_changed) {
+                        ESP_LOGI(TAG, "MQTT config changed, restarting with new broker");
+                        esp_timer_start_once(s_restart_timer, 1);
+                    } else {
+                        ESP_LOGI(TAG, "Config applied, no MQTT change needed");
+                    }
+                }
+            }
             break;
         default:
             break;
@@ -84,6 +122,7 @@ char *push_build_json_payload(queueNode_t *node)
     deviceInfo_t device;
     char *snapType = NULL;
     char time_str[32];
+    char upload_time_str[32];
     char header[] = "data:image/jpeg;base64,";
 
     switch (node->type) {
@@ -123,6 +162,8 @@ char *push_build_json_payload(queueNode_t *node)
     cfg_get_device_info(&device);
     time_t t = node->pts / 1000;
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", localtime(&t));
+    time_t upload_t = time(NULL);
+    strftime(upload_time_str, sizeof(upload_time_str), "%Y-%m-%d %H:%M:%S", localtime(&upload_t));
 
     cJSON *json = cJSON_CreateObject();
     cJSON *subJson = cJSON_CreateObject();
@@ -135,6 +176,7 @@ char *push_build_json_payload(queueNode_t *node)
     cJSON_AddNumberToObject(subJson, "batteryVoltage", misc_get_battery_voltage());
     cJSON_AddStringToObject(subJson, "snapType", snapType);
     cJSON_AddStringToObject(subJson, "localtime", time_str);
+    cJSON_AddStringToObject(subJson, "uploadtime", upload_time_str);
     cJSON_AddNumberToObject(subJson, "imageSize", picSize + strlen(header));
     cJSON_AddStringToObject(subJson, "image", (char *)g_MQ.sendBuf);
     cJSON_AddNumberToObject(json, "ts", node->pts);
@@ -153,12 +195,18 @@ esp_err_t mqtt_publish_node(queueNode_t *node)
         return ESP_FAIL;
     }
 
+    cfg_get_mqtt_attr(&mqtt);
+    if (mqtt.topic[0] == '\0') {
+        ESP_LOGE(TAG, "MQTT topic is empty");
+        return ESP_FAIL;
+    }
+
     char *json_str = push_build_json_payload(node);
     if (json_str == NULL) {
         return ESP_FAIL;
     }
 
-    cfg_get_mqtt_attr(&mqtt);
+    ESP_LOGI(TAG, "Publishing to topic: %s, qos: %d", mqtt.topic, mqtt.qos);
     int res = esp_mqtt_client_publish(g_MQ.client, mqtt.topic, json_str, 0, mqtt.qos, 0);
     if (mqtt.qos == 0) {
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -184,12 +232,21 @@ static void mqtt_esp_config(mdMqtt_t *m)
 
     memset(c, 0, sizeof(esp_mqtt_client_config_t));
     cfg_get_mqtt_attr(&m->mqtt);
+
+    /* If no user-defined host, fall back to onboarding defaults */
+    if (m->mqtt.host[0] == '\0') {
+        snprintf(m->mqtt.host, sizeof(m->mqtt.host), "%s", onboarding_get_default_host());
+        m->mqtt.port = onboarding_get_default_port();
+        ESP_LOGI(TAG, "Using default onboarding broker: %s:%lu",
+                 m->mqtt.host, (unsigned long)m->mqtt.port);
+    }
+
     c->broker.address.hostname = m->mqtt.host;
     c->broker.address.port = m->mqtt.port;
     c->broker.address.transport = m->mqtt.tlsEnable ? MQTT_TRANSPORT_OVER_SSL : MQTT_TRANSPORT_OVER_TCP;
     c->credentials.username = m->mqtt.user;
     c->credentials.client_id = m->mqtt.clientId;
-    c->task.stack_size = 6 * 1024;
+    c->task.stack_size = 12 * 1024;
     c->network.disable_auto_reconnect = true;
     if (strlen(m->mqtt.password)) {
         c->credentials.authentication.password = m->mqtt.password;
@@ -268,6 +325,11 @@ static esp_console_cmd_t g_cmd[] = {
 void mqtt_open(void)
 {
     memset(&g_MQ, 0, sizeof(mdMqtt_t));
+    const esp_timer_create_args_t restart_timer_args = {
+        .callback = mqtt_restart_timer_cb,
+        .name = "mqtt_restart",
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&restart_timer_args, &s_restart_timer));
     g_MQ.eventGroup = xEventGroupCreate();
     g_MQ.mutex = xSemaphoreCreateMutex();
     g_MQ.sendBuf = malloc(PUSH_SEND_BUFFER_SIZE);
@@ -300,6 +362,11 @@ void mqtt_restart(void)
 
 void mqtt_close(void)
 {
+    if (s_restart_timer) {
+        esp_timer_stop(s_restart_timer);
+        esp_timer_delete(s_restart_timer);
+        s_restart_timer = NULL;
+    }
     if (g_MQ.sendBuf) {
         free(g_MQ.sendBuf);
         g_MQ.sendBuf = NULL;

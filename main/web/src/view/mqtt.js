@@ -8,21 +8,8 @@ function Mqtt() {
         // --MQTT Post--
         mqttHostError: false,
         mqttPortError: false,
-        httpPortError: false,
         mqttTopicError: false,
 
-        // --- New ---
-        currentPlatformType: 1,
-        platformOptions: [
-            {
-                value: 0,
-                label: $t('mqtt.sensingPlatform'),
-            },
-            {
-                value: 1,
-                label: $t('mqtt.otherMqttPlatform'),
-            },
-        ],
         qosOptions: [
             {
                 value: 0,
@@ -48,11 +35,6 @@ function Mqtt() {
                 label: 'MQTTS',
             },
         ],
-        sensingPlatform: {
-            host: '192.168.1.1',
-            mqttPort: 1883,
-            httpPort: 5220,
-        },
         mqttPlatform: {
             host: '192.168.1.1',
             mqttPort: 1883,
@@ -342,15 +324,25 @@ function Mqtt() {
         },
 
 
+        mapMqttResponse(res) {
+            return {
+                host: res.host || '',
+                mqttPort: res.port ?? 1883,
+                topic: res.topic || '',
+                clientId: res.clientId || '',
+                qos: res.qos ?? 0,
+                username: res.user || '',
+                password: res.password || '',
+                isConnected: res.isConnected ?? 0,
+                tlsEnable: res.tlsEnable ?? 0,
+                caName: res.caName || '',
+                certName: res.certName || '',
+                keyName: res.keyName || '',
+            };
+        },
         async getDataReport() {
             const res = await getData(URL.getDataReport);
-            // this.currentPlatformType = res.currentPlatformType;
-            // this.sensingPlatform = { ...res.sensingPlatform };
-            this.mqttPlatform = { ...res.mqttPlatform };
-            // compatible with backend ssl 0/1, frontend uses tlsEnable field
-            if (res.mqttPlatform && res.mqttPlatform.ssl !== undefined) {
-                this.mqttPlatform.tlsEnable = res.mqttPlatform.ssl;
-            }
+            this.mqttPlatform = this.mapMqttResponse(res);
             this.dataReportMount = true;
             this.updateMqttStatus()
             return;
@@ -361,7 +353,7 @@ function Mqtt() {
             const that = this;
             async function loop() {
                 const res = await getData(URL.getDataReport);
-                that.mqttPlatform.isConnected = res.mqttPlatform.isConnected;
+                that.mqttPlatform.isConnected = res.isConnected ?? 0;
                 statusTimer = setTimeout(loop, 2000);
             }
             loop();
@@ -372,9 +364,6 @@ function Mqtt() {
                 clearTimeout(statusTimer);
                 statusTimer = null;
             }
-        },
-        changePlatform({ detail }) {
-            // this.currentPlatformType = detail.value;
         },
         changeQos({ detail }) {
             this.mqttPlatform.qos = detail.value;
@@ -394,16 +383,6 @@ function Mqtt() {
                 this.mqttPortError = false;
             } else {
                 this.mqttPortError = true;
-            }
-        },
-        inputHttpPort() {
-            if (
-                this.checkRequired(this.sensingPlatform.httpPort) &&
-                this.checkNumberRange(this.sensingPlatform.httpPort, 1, 65535)
-            ) {
-                this.httpPortError = false;
-            } else {
-                this.httpPortError = true;
             }
         },
         inputMqttTopic() {
@@ -510,23 +489,19 @@ function Mqtt() {
             //         return;
             //     }
             // }
-            this.mqttPlatform.mqttPort = Number(this.mqttPlatform.mqttPort);
-            // map tlsEnable to ssl when submitting
-            const submitPlatform = { ...this.mqttPlatform };
-            submitPlatform.ssl = this.mqttPlatform.tlsEnable;
-            let data = {
-                currentPlatformType: 1,
-                mqttPlatform: submitPlatform
+            const data = {
+                host: this.mqttPlatform.host,
+                port: Number(this.mqttPlatform.mqttPort),
+                topic: this.mqttPlatform.topic,
+                clientId: this.mqttPlatform.clientId,
+                qos: Number(this.mqttPlatform.qos),
+                user: this.mqttPlatform.username,
+                password: this.mqttPlatform.password,
+                tlsEnable: this.mqttPlatform.tlsEnable,
+                caName: this.mqttPlatform.caName,
+                certName: this.mqttPlatform.certName,
+                keyName: this.mqttPlatform.keyName,
             };
-            // if (this.currentPlatformType == 0) {
-            //     this.sensingPlatform.httpPort = Number(this.sensingPlatform.httpPort);
-            //     data.sensingPlatform = { ...this.sensingPlatform };
-            // } else if (this.currentPlatformType == 1) {
-            // Host and Mqtt Port values share one
-            // this.mqttPlatform.host = this.sensingPlatform.host;
-            // this.mqttPlatform.mqttPort = this.sensingPlatform.mqttPort;
-            // data.mqttPlatform = { ...this.mqttPlatform };
-            // }
             try {
                 await postData(URL.setDataReport, data);
                 this.alertMessage("success");

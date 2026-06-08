@@ -16,6 +16,7 @@ extern "C" {
 #endif
 
 #define MAX_LEN_3 3
+#define MAX_LEN_12 12
 #define MAX_LEN_8 8
 #define MAX_LEN_16 16
 #define MAX_LEN_32 32
@@ -81,7 +82,6 @@ extern "C" {
 #define KEY_UPLOAD_INTERVAL_V "upload:iValue"
 #define KEY_UPLOAD_INTERVAL_U "upload:iUnit"
 #define KEY_UPLOAD_RETRY    "upload:retry"
-#define KEY_PLATFORM_TYPE   "plat:type"
 #define KEY_SNS_HTTP_PORT   "sns:httpPort"
 #define KEY_MQTT_ENABLE     "mqtt:enable"
 #define KEY_MQTT_HOST       "mqtt:host"
@@ -133,7 +133,7 @@ typedef struct deviceInfo {
     char softVersion[MAX_LEN_32];
     char model[MAX_LEN_16];
     char secretKey[MAX_LEN_16];
-    char countryCode[MAX_LEN_3];
+    char countryCode[MAX_LEN_12];
     char netmod[MAX_LEN_8];
     char camera[MAX_LEN_8];
     char apIp[MAX_LEN_16];
@@ -254,65 +254,6 @@ typedef struct batteryAttr {
 } batteryAttr_t;
 
 /**
- * Platform type enumeration
- */
-typedef enum {
-    PLATFORM_TYPE_SENSING = 0,
-    PLATFORM_TYPE_MQTT,
-    PLATFORM_TYPE_MAX
-} platformType_e;
-
-/**
- * Sensing platform attributes structure
- */
-typedef struct sensingPlatformAttr {
-    // sensing platform fixed values
-    uint8_t platformType;
-    char platformName[MAX_LEN_32];
-    // configurable parameters
-    char host[MAX_LEN_128];
-    uint32_t mqttPort;
-    uint32_t httpPort;
-    // non-configurable parameters
-    char topic[MAX_LEN_128];
-    char username[MAX_LEN_128];
-    char password[MAX_LEN_128];
-    char clientId[MAX_LEN_128];
-    uint8_t qos;
-} sensingPlatformAttr_t;
-
-/**
- * MQTT platform attributes structure
- */
-typedef struct mqttPlatformAttr {
-    // MQTT platform fixed values
-    uint8_t platformType;
-    char platformName[MAX_LEN_32];
-    // configurable parameters
-    char host[MAX_LEN_128];
-    uint32_t mqttPort;
-    char topic[MAX_LEN_128];
-    char clientId[MAX_LEN_128];
-    uint8_t qos;
-    char username[MAX_LEN_128];
-    char password[MAX_LEN_128];
-    uint8_t isConnected;
-    uint8_t tlsEnable; // 0: disable, 1: enable
-    char caName[MAX_LEN_128];
-    char certName[MAX_LEN_128];
-    char keyName[MAX_LEN_128];
-} mqttPlatformAttr_t;
-
-/**
- * Platform parameters structure
- */
-typedef struct platformParamAttr {
-    uint8_t currentPlatformType;
-    sensingPlatformAttr_t sensingPlatform;
-    mqttPlatformAttr_t mqttPlatform;
-} platformParamAttr_t;
-
-/**
  * Cellular authentication type enumeration
  */
 typedef enum  {
@@ -405,8 +346,6 @@ esp_err_t cfg_get_mqtt_attr(mqttAttr_t *mqtt);
 esp_err_t cfg_set_mqtt_attr(mqttAttr_t *mqtt);
 esp_err_t cfg_get_wifi_attr(wifiAttr_t *wifi);
 esp_err_t cfg_set_wifi_attr(wifiAttr_t *wifi);
-esp_err_t cfg_get_platform_param_attr(platformParamAttr_t *platformParam);
-esp_err_t cfg_set_platform_param_attr(platformParamAttr_t *platformParam);
 esp_err_t cfg_get_cellular_param_attr(cellularParamAttr_t *cellularParam);
 esp_err_t cfg_set_cellular_param_attr(cellularParamAttr_t *cellularParam);
 esp_err_t cfg_get_cellular_baud_rate(uint32_t *baudRate);

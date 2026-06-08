@@ -32,10 +32,12 @@ struct mm_scan_args {
     struct mmosal_semb *semaphore;
 };
 
+#define MM_WIFI_DOMAIN_CODE_MAXLEN 12
+
 struct mm_wifi_config {
     char ssid[MMWLAN_SSID_MAXLEN];
     char password[MMWLAN_PASSPHRASE_MAXLEN];
-    char country_code[3];
+    char country_code[MM_WIFI_DOMAIN_CODE_MAXLEN];
     esp_netif_t *netif;
 };
 
@@ -52,11 +54,36 @@ static bool s_connect_pending;
 static void wifi_rx_cb(struct mmpkt *rxpkt, void *arg);
 static void wifi_link_state_cb(enum mmwlan_link_state link_state, void *arg);
 
-static void mm_wifi_select_bcf_by_country(const char *country_code)
+static void mm_wifi_iso_country_code(const char *domain_code, char iso_code[3])
 {
+    if (domain_code == NULL || domain_code[0] == '\0') {
+        iso_code[0] = '\0';
+        return;
+    }
+
+    if (strncmp(domain_code, "AU-", 3) == 0) {
+        strncpy(iso_code, "AU", 3);
+        return;
+    }
+
+    iso_code[0] = domain_code[0];
+    iso_code[1] = domain_code[1];
+    iso_code[2] = '\0';
+}
+
+static bool mm_wifi_is_valid_domain_code(const char *domain_code)
+{
+    return domain_code != NULL && mmregdb_lookup_domain(domain_code) != NULL;
+}
+
+static void mm_wifi_select_bcf_by_country(const char *domain_code)
+{
+    char iso_code[3] = { 0 };
+
     /* Select embedded BCF BEFORE mmwlan_init()/mmwlan_boot(). */
     extern void mmhal_wlan_select_bcf_by_country(const char *country_code);
-    mmhal_wlan_select_bcf_by_country(country_code);
+    mm_wifi_iso_country_code(domain_code, iso_code);
+    mmhal_wlan_select_bcf_by_country(iso_code);
 }
 
 static esp_err_t mm_wifi_mmwlan_init_and_boot(esp_netif_t *esp_netif,
@@ -84,8 +111,7 @@ static esp_err_t mm_wifi_mmwlan_init_and_boot(esp_netif_t *esp_netif,
         return ESP_FAIL;
     }
 
-    const struct mmwlan_s1g_channel_list *channel_list =
-        mmwlan_lookup_regulatory_domain(get_regulatory_db(), country_code);
+    const struct mmwlan_s1g_channel_list *channel_list = mmregdb_lookup_domain(country_code);
     if (channel_list == NULL) {
         ESP_LOGE(TAG, "Could not find specified regulatory domain matching country code %s", country_code);
         return ESP_FAIL;
@@ -368,7 +394,7 @@ void mm_netif_destroy_wifi_sta(esp_netif_t *esp_netif)
 
 esp_err_t mm_wifi_init(esp_netif_t *esp_netif, uint8_t *mac_addr, const char *country_code)
 {
-    if (strlen(country_code) != 2) {
+    if (!mm_wifi_is_valid_domain_code(country_code)) {
         ESP_LOGE(TAG, "Invalid country code: %s", country_code);
         return ESP_FAIL;
     }
@@ -382,7 +408,8 @@ esp_err_t mm_wifi_init(esp_netif_t *esp_netif, uint8_t *mac_addr, const char *co
              mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 
     g_mm_wifi_config.netif = esp_netif;
-    strncpy(g_mm_wifi_config.country_code, country_code, 3);
+    strncpy(g_mm_wifi_config.country_code, country_code, sizeof(g_mm_wifi_config.country_code));
+    g_mm_wifi_config.country_code[sizeof(g_mm_wifi_config.country_code) - 1] = '\0';
     ESP_LOGI(TAG, "initialized OK");
     esp_netif_action_start(esp_netif, NULL, 0, NULL);
     return ESP_OK;
@@ -469,12 +496,12 @@ esp_err_t mm_wifi_set_mac(uint8_t *mac)
 
 esp_err_t mm_wifi_set_country_code(const char *country_code)
 {
-    if (strlen(country_code) != 2) {
+    if (!mm_wifi_is_valid_domain_code(country_code)) {
         ESP_LOGE(TAG, "Invalid country code: %s", country_code);
         return ESP_FAIL;
     }
 
-    if (strncmp(country_code, g_mm_wifi_config.country_code, 3) == 0) {
+    if (strcmp(country_code, g_mm_wifi_config.country_code) == 0) {
         ESP_LOGI(TAG, "Country code already set to %s", country_code);
         return ESP_OK;
     }
@@ -484,8 +511,7 @@ esp_err_t mm_wifi_set_country_code(const char *country_code)
      * to morselib. BCF is read during mmwlan_init()/boot, but esp_netif must NOT be re-added.
      * So we restart only the mmwlan stack (shutdown/deinit/init/boot), not mmhal_init/netif.
      */
-    const struct mmwlan_s1g_channel_list *channel_list =
-        mmwlan_lookup_regulatory_domain(get_regulatory_db(), country_code);
+    const struct mmwlan_s1g_channel_list *channel_list = mmregdb_lookup_domain(country_code);
     if (channel_list == NULL) {
         ESP_LOGE(TAG, "Could not find specified regulatory domain matching country code %s",
                  country_code);
@@ -521,7 +547,8 @@ esp_err_t mm_wifi_set_country_code(const char *country_code)
         return ESP_FAIL;
     }
 
-    strncpy(g_mm_wifi_config.country_code, country_code, 3);
+    strncpy(g_mm_wifi_config.country_code, country_code, sizeof(g_mm_wifi_config.country_code));
+    g_mm_wifi_config.country_code[sizeof(g_mm_wifi_config.country_code) - 1] = '\0';
     ESP_LOGI(TAG, "Set country code to %s", country_code);
 
     /* Best-effort reconnect. */
@@ -531,7 +558,8 @@ esp_err_t mm_wifi_set_country_code(const char *country_code)
 
 esp_err_t mm_wifi_get_country_code(char *country_code)
 {
-    strncpy(country_code, g_mm_wifi_config.country_code, 3);
+    strncpy(country_code, g_mm_wifi_config.country_code, MM_WIFI_DOMAIN_CODE_MAXLEN);
+    country_code[MM_WIFI_DOMAIN_CODE_MAXLEN - 1] = '\0';
     return ESP_OK;
 }
 

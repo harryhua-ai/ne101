@@ -92,10 +92,10 @@ const URL = {
     getCapParam: baseUrl + "/capture/getCapParam",
 
     setCapParam: baseUrl + "/capture/setCapParam",
-    getMqttParam: baseUrl + "/network/getPlatformParam",
-
-    getDataReport: baseUrl + "/network/getPlatformParam",
-    setDataReport: baseUrl + "/network/setPlatformParam",
+    getMqttParam: baseUrl + "/network/getMqttParam",
+    setMqttParam: baseUrl + "/network/setMqttParam",
+    getDataReport: baseUrl + "/network/getMqttParam",
+    setDataReport: baseUrl + "/network/setMqttParam",
     getDevInfo: baseUrl + "/system/getDevInfo",
     setDevInfo: baseUrl + "/system/setDevInfo",
     getDevBattery: baseUrl + "/system/getDevBattery",
