@@ -530,6 +530,86 @@ void cfg_dump()
 }
 
 /*--------------------------debug--------------------------------------*/
+static void cfg_dump_userspace(void)
+{
+    nvs_iterator_t it = NULL;
+    esp_err_t ret = nvs_entry_find(NVS_CFG_PARTITION, NVS_USER_NAMESPACE, NVS_TYPE_ANY, &it);
+
+    if (ret != ESP_OK) {
+        printf("No userspace entries found\n");
+        return;
+    }
+    while (ret == ESP_OK) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        printf("%s = ", info.key);
+        get_value_from_nvs(info.namespace_name, info.key, info.type);
+        ret = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+}
+
+static esp_err_t uset_find_key_type(const char *key, nvs_type_t *type)
+{
+    nvs_iterator_t it = NULL;
+    esp_err_t ret = nvs_entry_find(NVS_CFG_PARTITION, NVS_USER_NAMESPACE, NVS_TYPE_ANY, &it);
+
+    while (ret == ESP_OK) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        if (strcmp(info.key, key) == 0) {
+            *type = info.type;
+            nvs_release_iterator(it);
+            return ESP_OK;
+        }
+        ret = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+    return ESP_ERR_NVS_NOT_FOUND;
+}
+
+static int do_uset_cmd(int argc, char **argv)
+{
+    if (argc < 2) {
+        cfg_dump_userspace();
+        return ESP_OK;
+    }
+
+    if (strcmp(argv[1], "erase") == 0) {
+        if (argc < 3) {
+            printf("usage: uset erase <key>\n");
+            return ESP_OK;
+        }
+        cfg_erase_key(argv[2]);
+        printf("erased %s\n", argv[2]);
+        return ESP_OK;
+    }
+
+    if (argc == 2) {
+        nvs_type_t type;
+        if (uset_find_key_type(argv[1], &type) != ESP_OK) {
+            printf("key not found: %s\n", argv[1]);
+            return ESP_OK;
+        }
+        get_value_from_nvs(NVS_USER_NAMESPACE, argv[1], type);
+        return ESP_OK;
+    }
+
+    char value[MAX_LEN_256] = {0};
+    for (int i = 2; i < argc; i++) {
+        if (i > 2) {
+            strncat(value, " ", sizeof(value) - strlen(value) - 1);
+        }
+        strncat(value, argv[i], sizeof(value) - strlen(value) - 1);
+    }
+    if (strcmp(argv[1], KEY_MQTT_HOST) == 0) {
+        strip_mqtt_scheme(value);
+    }
+    cfg_set_str(argv[1], value);
+    printf("set %s = %s\n", argv[1], value);
+    return ESP_OK;
+}
+
 static int do_fset_cmd(int argc, char **argv)
 {
     const char *key[] = {KEY_DEVICE_MAC, KEY_DEVICE_SN, KEY_DEVICE_HVER, KEY_DEVICE_MODEL, KEY_DEVICE_COUNTRY, KEY_DEVICE_SECRETKEY};
@@ -692,6 +772,7 @@ static int do_mode_cmd(int argc, char **argv)
 }
 
 static esp_console_cmd_t g_cmd[] = {
+    ESP_CONSOLE_CMD_INIT("uset", "userspace config: uset | uset <key> | uset <key> <value> | uset erase <key>", NULL, do_uset_cmd, NULL),
     ESP_CONSOLE_CMD_INIT("fset", "factory setting: fset [key] [value]", NULL, do_fset_cmd, NULL),
     ESP_CONSOLE_CMD_INIT("fget", "factory getting: fget [key]", NULL, do_fget_cmd, NULL),
     ESP_CONSOLE_CMD_INIT("reboot", "system restart", NULL, do_reboot_cmd, NULL),
@@ -975,12 +1056,15 @@ esp_err_t cfg_get_mqtt_attr(mqttAttr_t *mqtt)
     get_str(g_userHandle, KEY_MQTT_CERT_NAME, mqtt->certName, sizeof(mqtt->certName), "");
     get_str(g_userHandle, KEY_MQTT_KEY_NAME, mqtt->keyName, sizeof(mqtt->keyName), "");
     get_u32(g_userHandle, KEY_SNS_HTTP_PORT, &mqtt->httpPort, 5220);
+    strip_mqtt_scheme(mqtt->host);
     mutex_unlock();
     return ESP_OK;
 }
 
 esp_err_t cfg_set_mqtt_attr(mqttAttr_t *mqtt)
 {
+    strip_mqtt_scheme(mqtt->host);
+
     if (strlen(mqtt->clientId) == 0) {
         char id[24] = {0};
         generate_random_string(id, sizeof(id) - 1);

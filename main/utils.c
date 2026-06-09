@@ -257,3 +257,20 @@ void task_delete(void *handle)
     }
     free(hdl);
 }
+
+void strip_mqtt_scheme(char *host)
+{
+    const char *start = host;
+
+    if (start == NULL || *start == '\0') {
+        return;
+    }
+    if (strncasecmp(start, "mqtts://", 8) == 0) {
+        start += 8;
+    } else if (strncasecmp(start, "mqtt://", 7) == 0) {
+        start += 7;
+    }
+    if (start != host) {
+        memmove(host, start, strlen(start) + 1);
+    }
+}

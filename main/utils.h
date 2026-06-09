@@ -80,6 +80,12 @@ int8_t get_timestamp(char *timestamp, int len);
 void generate_random_string(char *str, size_t len);
 
 /**
+ * @brief Strip mqtt:// or mqtts:// prefix from MQTT broker host string (in-place)
+ * @param host Host buffer to normalize
+ */
+void strip_mqtt_scheme(char *host);
+
+/**
  * @brief Calculate MD5 hash of input data
  * @param input Data to hash
  * @param ilen Input data length

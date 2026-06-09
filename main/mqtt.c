@@ -241,6 +241,7 @@ static void mqtt_esp_config(mdMqtt_t *m)
                  m->mqtt.host, (unsigned long)m->mqtt.port);
     }
 
+    strip_mqtt_scheme(m->mqtt.host);
     c->broker.address.hostname = m->mqtt.host;
     c->broker.address.port = m->mqtt.port;
     c->broker.address.transport = m->mqtt.tlsEnable ? MQTT_TRANSPORT_OVER_SSL : MQTT_TRANSPORT_OVER_TCP;
