@@ -12,6 +12,7 @@
  */
 #include "onboarding.h"
 #include "config.h"
+#include "utils.h"
 #include "camera.h"
 #include "mmregdb.h"
 #include "morse.h"
@@ -439,6 +440,7 @@ static bool pir_attr_differs(const pirAttr_t *a, const pirAttr_t *b)
 
 static void sanitize_mqtt_attr(mqttAttr_t *mqtt)
 {
+    strip_mqtt_scheme(mqtt->host);
     mqtt->port = clamp_u32(mqtt->port, 1, 65535);
     mqtt->qos = clamp_u8(mqtt->qos, 0, 2);
     mqtt->tlsEnable = mqtt->tlsEnable ? 1 : 0;
@@ -706,6 +708,7 @@ esp_err_t onboarding_handle_config(const char *data, size_t len, bool *mqtt_chan
         return ESP_FAIL;
     }
 
+    ESP_LOGI(TAG, "onboarding_handle_config: root: %s", cJSON_Print(root));
     *mqtt_changed = false;
     bool push_mode_changed = false;
     bool upload_mode_changed = false;
