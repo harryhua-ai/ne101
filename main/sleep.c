@@ -43,6 +43,7 @@
  */
 typedef struct mdSleep {
     EventGroupHandle_t eventGroup;  // Event group for sleep synchronization
+    bool bSleeping;  // True if the system is in sleep mode
 } mdSleep_t;
 
 // RTC memory preserved variables
@@ -636,6 +637,7 @@ void sleep_wait_event_bits(sleepBits_e bits, bool bWaitAll)
                                              true, bWaitAll, \
                                              pdMS_TO_TICKS(SLEEP_WAIT_TIMEOUT_MS));
     ESP_LOGI(TAG, "sleep right now, bits=%lu", uxBits);
+    g_sleep.bSleeping = true;
     sleep_start();
 }
 
@@ -861,4 +863,13 @@ bool sleep_is_will_wakeup_time_reached(void)
     }
     
     return g_willWakeupTime <= now;
+}
+
+/**
+ * Check if the system is entering deep sleep
+ * @return true if the system is entering deep sleep, false otherwise
+ */
+bool sleep_is_entering_deep_sleep(void)
+{
+    return g_sleep.bSleeping;
 }
