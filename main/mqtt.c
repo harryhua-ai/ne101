@@ -45,6 +45,10 @@ static esp_timer_handle_t s_restart_timer;
 static void mqtt_restart_timer_cb(void *arg)
 {
     (void)arg;
+    if (sleep_is_entering_deep_sleep()) {
+        ESP_LOGI(TAG, "System is entering deep sleep, skipping restart");
+        return;
+    }
     mqtt_restart();
 }
 
@@ -55,25 +59,21 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event, void *hand
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
+
+            /* Always subscribe to the default onboarding topic for cloud config updates */
+            char topic[ONBOARDING_TOPIC_MAX_LEN] = {0};
+            if (onboarding_get_default_topic(topic, sizeof(topic)) == ESP_OK) {
+                ESP_LOGI(TAG, "Subscribing to default topic: %s", topic);
+                int msg_id = esp_mqtt_client_subscribe(mqtt->client, topic, 0);
+                if (msg_id < 0) {
+                    ESP_LOGE(TAG, "Failed to subscribe to default topic");
+                } else {
+                    ESP_LOGI(TAG, "Default topic subscription msg_id=%d", msg_id);
+                }
+            }
             mqtt->isConnected = true;
             xEventGroupClearBits(mqtt->eventGroup, MQTT_DISCONNECT_BIT);
             xEventGroupSetBits(mqtt->eventGroup, MQTT_CONNECT_BIT);
-            storage_upload_start();
-            push_ready();
-
-            /* Always subscribe to the default onboarding topic for cloud config updates */
-            {
-                char topic[ONBOARDING_TOPIC_MAX_LEN] = {0};
-                if (onboarding_get_default_topic(topic, sizeof(topic)) == ESP_OK) {
-                    ESP_LOGI(TAG, "Subscribing to default topic: %s", topic);
-                    int msg_id = esp_mqtt_client_subscribe(mqtt->client, topic, 0);
-                    if (msg_id < 0) {
-                        ESP_LOGE(TAG, "Failed to subscribe to default topic");
-                    } else {
-                        ESP_LOGI(TAG, "Default topic subscription msg_id=%d", msg_id);
-                    }
-                }
-            }
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -81,6 +81,12 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event, void *hand
             xEventGroupSetBits(mqtt->eventGroup, MQTT_DISCONNECT_BIT);
             mqtt->isConnected = false;
             storage_upload_stop();
+            push_exit();
+            break;
+        case MQTT_EVENT_SUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT_EVENT_SUBSCRIBED, msg_id=%d", event->msg_id);
+            storage_upload_start();
+            push_ready();
             break;
         case MQTT_EVENT_PUBLISHED:
             ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
@@ -88,6 +94,7 @@ static esp_err_t mqtt_event_handler_cb(esp_mqtt_event_handle_t event, void *hand
             break;
         case MQTT_EVENT_ERROR:
             ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+            push_exit();
             break;
         case MQTT_EVENT_DATA:
             ESP_LOGI(TAG, "MQTT_EVENT_DATA, topic=%.*s", event->topic_len, event->topic);
@@ -232,7 +239,6 @@ static void mqtt_esp_config(mdMqtt_t *m)
 
     memset(c, 0, sizeof(esp_mqtt_client_config_t));
     cfg_get_mqtt_attr(&m->mqtt);
-
     /* If no user-defined host, fall back to onboarding defaults */
     if (m->mqtt.host[0] == '\0') {
         snprintf(m->mqtt.host, sizeof(m->mqtt.host), "%s", onboarding_get_default_host());
@@ -309,6 +315,7 @@ static int8_t mqtt_esp_stop(mdMqtt_t *m)
     esp_mqtt_client_destroy(m->client);
     mqtt_free_tls_certs(m);
     m->client = NULL;
+    m->isConnected = false;
     return 0;
 }
 
@@ -341,24 +348,40 @@ void mqtt_open(void)
 
 void mqtt_start(void)
 {
-    if (g_MQ.isConnected) {
+    xSemaphoreTake(g_MQ.mutex, portMAX_DELAY);
+    if (g_MQ.client) {
+        xSemaphoreGive(g_MQ.mutex);
         return;
     }
     ESP_LOGI(TAG, "mqtt esp start");
     mqtt_esp_start(&g_MQ);
+    xSemaphoreGive(g_MQ.mutex);
 }
 
 void mqtt_stop(void)
 {
+    if (s_restart_timer) {
+        esp_timer_stop(s_restart_timer);
+    }
+    xSemaphoreTake(g_MQ.mutex, portMAX_DELAY);
+    if (!g_MQ.client) {
+        xSemaphoreGive(g_MQ.mutex);
+        return;
+    }
     mqtt_esp_stop(&g_MQ);
-    g_MQ.isConnected = false;
+    xSemaphoreGive(g_MQ.mutex);
     ESP_LOGI(TAG, "esp_mqtt_client_stop");
 }
 
 void mqtt_restart(void)
 {
-    mqtt_stop();
-    mqtt_start();
+    xSemaphoreTake(g_MQ.mutex, portMAX_DELAY);
+    if (g_MQ.client) {
+        mqtt_esp_stop(&g_MQ);
+    }
+    ESP_LOGI(TAG, "mqtt esp restart");
+    mqtt_esp_start(&g_MQ);
+    xSemaphoreGive(g_MQ.mutex);
 }
 
 void mqtt_close(void)
@@ -368,6 +391,11 @@ void mqtt_close(void)
         esp_timer_delete(s_restart_timer);
         s_restart_timer = NULL;
     }
+    xSemaphoreTake(g_MQ.mutex, portMAX_DELAY);
+    if (g_MQ.client) {
+        mqtt_esp_stop(&g_MQ);
+    }
+    xSemaphoreGive(g_MQ.mutex);
     if (g_MQ.sendBuf) {
         free(g_MQ.sendBuf);
         g_MQ.sendBuf = NULL;

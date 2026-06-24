@@ -194,6 +194,12 @@ uint32_t sleep_is_alramin_goto_restart();
  */
 bool sleep_is_will_wakeup_time_reached(void);
 
+/**
+ * Check if the system is entering deep sleep
+ * @return true if the system is entering deep sleep, false otherwise
+ */
+bool sleep_is_entering_deep_sleep(void);
+
 #ifdef __cplusplus
 }
 #endif

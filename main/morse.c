@@ -551,8 +551,6 @@ esp_err_t mm_wifi_set_country_code(const char *country_code)
     g_mm_wifi_config.country_code[sizeof(g_mm_wifi_config.country_code) - 1] = '\0';
     ESP_LOGI(TAG, "Set country code to %s", country_code);
 
-    /* Best-effort reconnect. */
-    (void)mm_wifi_connect();
     return ESP_OK;
 }
 
