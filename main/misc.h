@@ -20,7 +20,7 @@ extern "C" {
 
 /* Light sensor control pins and parameters */
 #define LIGHT_DET_IO        (1)
-#define LIGHT_POWER_IO      (3)//(3)
+#define LIGHT_POWER_IO      (42)
 #define LIGHT_POWER_ON      (1)
 #define LIGHT_POWER_OFF     (0)
 #define LIGHT_MIN_SENS      (0)    /* Minimum light sensor value */
